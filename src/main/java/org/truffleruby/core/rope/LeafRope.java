@@ -11,10 +11,16 @@ package org.truffleruby.core.rope;
 
 import org.jcodings.Encoding;
 
+import static org.truffleruby.core.rope.CodeRange.CR_BROKEN;
+import static org.truffleruby.core.rope.CodeRange.CR_VALID;
+
 public abstract class LeafRope extends ManagedRope {
 
-    public LeafRope(byte[] bytes, Encoding encoding, CodeRange codeRange, int characterLength) {
+    private final boolean isReadOnly;
+
+    protected LeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding, CodeRange codeRange, int characterLength) {
         super(encoding, codeRange, bytes.length, characterLength, bytes);
+        this.isReadOnly = isReadOnly;
     }
 
     @Override
@@ -22,4 +28,42 @@ public abstract class LeafRope extends ManagedRope {
         return getRawBytes()[index];
     }
 
+    @Override
+    public LeafRope getMutable() {
+        if (!isReadOnly) {
+            return this;
+        } else {
+            return clone(false);
+        }
+    }
+
+    @Override
+    protected ManagedRope getShared() {
+        if (!isReadOnly) {
+            return clone(false);
+        } else {
+            return this;
+        }
+    }
+
+    protected abstract LeafRope clone(boolean isReadOnly);
+
+    public void replaceRange(int spliceByteIndex, byte[] srcBytes, CodeRange srcCodeRange) {
+        assert !isReadOnly : "LeafRope not mutable!";
+        codeRange = commonCodeRange(getCodeRange(), srcCodeRange);
+        System.arraycopy(srcBytes, 0, this.bytes, spliceByteIndex, srcBytes.length);
+    }
+
+    private static CodeRange commonCodeRange(CodeRange first, CodeRange second) {
+        if (first == second) {
+            return first;
+        }
+
+        if ((first == CR_BROKEN) || (second == CR_BROKEN)) {
+            return CR_BROKEN;
+        }
+
+        // If we get this far, one must be CR_7BIT and the other must be CR_VALID, so promote to the more general code range.
+        return CR_VALID;
+    }
 }

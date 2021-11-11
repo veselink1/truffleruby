@@ -14,7 +14,7 @@ import org.jcodings.Encoding;
 
 public abstract class ManagedRope extends Rope {
 
-    private final CodeRange codeRange;
+    protected CodeRange codeRange;
     private final int characterLength;
 
     protected ManagedRope(
@@ -28,6 +28,8 @@ public abstract class ManagedRope extends Rope {
         this.codeRange = codeRange;
         this.characterLength = characterLength;
     }
+
+    protected abstract ManagedRope getShared();
 
     @Override
     public final CodeRange getCodeRange() {

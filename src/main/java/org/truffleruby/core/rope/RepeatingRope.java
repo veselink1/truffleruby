@@ -27,7 +27,7 @@ public class RepeatingRope extends ManagedRope {
                 byteLength,
                 child.characterLength() * times,
                 null);
-        this.child = child;
+        this.child = child.getShared();
         this.times = times;
     }
 
@@ -76,4 +76,8 @@ public class RepeatingRope extends ManagedRope {
         return times;
     }
 
+    @Override
+    protected ManagedRope getShared() {
+        return this;
+    }
 }

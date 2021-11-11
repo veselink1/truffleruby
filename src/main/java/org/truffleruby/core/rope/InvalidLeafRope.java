@@ -18,7 +18,11 @@ import com.oracle.truffle.api.CompilerDirectives;
 public class InvalidLeafRope extends LeafRope {
 
     public InvalidLeafRope(byte[] bytes, Encoding encoding, int characterLength) {
-        super(bytes, encoding, CodeRange.CR_BROKEN, characterLength);
+        this(true, bytes, encoding, characterLength);
+    }
+
+    private InvalidLeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding, int characterLength) {
+        super(isReadOnly, bytes, encoding, CodeRange.CR_BROKEN, characterLength);
 
         assert RopeOperations.isInvalid(bytes, encoding) : "valid string incorrectly marked as CR_BROKEN";
     }
@@ -33,5 +37,10 @@ public class InvalidLeafRope extends LeafRope {
     Rope withBinaryEncoding(ConditionProfile bytesNotNull) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new UnsupportedOperationException("Must only be called for CR_VALID Strings");
+    }
+
+    @Override
+    protected LeafRope clone(boolean isReadOnly) {
+        return new InvalidLeafRope(bytes, encoding, characterLength());
     }
 }

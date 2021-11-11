@@ -5161,6 +5161,22 @@ public abstract class StringNodes {
     @ImportStatic(StringGuards.class)
     public abstract static class StringSplicePrimitiveNode extends PrimitiveArrayArgumentsNode {
 
+        @Specialization(guards = {
+                "libOther.isRubyString(other)",
+                "ropeByteLengthEquals(libOther.getRope(other), byteCountToReplace)",
+        })
+        protected RubyString spliceExactReplace(
+                RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
+                @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
+            Rope otherRope = libOther.getRope(other);
+            LeafRope newRope = string.getRope().getMutable();
+
+            newRope.replaceRange(spliceByteIndex, otherRope.getBytes(), otherRope.getCodeRange());
+            string.setRope(newRope);
+
+            return string;
+        }
+
         @Specialization(guards = { "libOther.isRubyString(other)", "indexAtStartBound(spliceByteIndex)" })
         protected Object splicePrepend(
                 RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
@@ -5172,7 +5188,6 @@ public abstract class StringNodes {
             final Rope left = libOther.getRope(other);
             final Rope right = prependSubstringNode
                     .executeSubstring(original, byteCountToReplace, original.byteLength() - byteCountToReplace);
-
             final Rope prependResult = prependConcatNode.executeConcat(left, right, encoding);
             string.setRope(prependResult, rubyEncoding);
 
@@ -5231,6 +5246,10 @@ public abstract class StringNodes {
             return string;
         }
 
+        protected boolean ropeByteLengthEquals(Rope rope, int byteLength) {
+            return rope.byteLength() == byteLength;
+        }
+
         protected boolean indexAtStartBound(int index) {
             return index == 0;
         }
@@ -5242,7 +5261,6 @@ public abstract class StringNodes {
         protected boolean indexAtEitherBounds(RubyString string, int index) {
             return indexAtStartBound(index) || indexAtEndBound(string, index);
         }
-
     }
 
     @Primitive(name = "string_to_inum", lowerFixnum = 1)

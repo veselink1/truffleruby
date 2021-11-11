@@ -28,9 +28,15 @@ public class ConcatRope extends ManagedRope {
 
         public ConcatState(ManagedRope left, ManagedRope right, byte[] bytes) {
             assert bytes == null && left != null && right != null || bytes != null && left == null && right == null;
-            this.left = left;
-            this.right = right;
-            this.bytes = bytes;
+            if (bytes == null) {
+                this.left = left.getShared();
+                this.right = right.getShared();
+                this.bytes = null;
+            } else {
+                this.left = null;
+                this.right = null;
+                this.bytes = bytes;
+            }
         }
 
         public boolean isFlattened() {
@@ -69,6 +75,11 @@ public class ConcatRope extends ManagedRope {
         assert right != null;
         this.left = left;
         this.right = right;
+    }
+
+    @Override
+    protected ManagedRope getShared() {
+        return this;
     }
 
     @Override

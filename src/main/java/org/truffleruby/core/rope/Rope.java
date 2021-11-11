@@ -36,6 +36,12 @@ public abstract class Rope implements Comparable<Rope> {
         this.bytes = bytes;
     }
 
+    /// Returns a rope representing the same string. The returned rope is guaranteed to not share mutable state with
+    /// any other rope instance.
+    public LeafRope getMutable() {
+        return copyIntoLeaf();
+    }
+
     /** Only used internally by WithEncodingNode. Returns a Rope with the given Encoding. Both the original and new
      * Encodings must be ASCII-compatible and the rope must be {@link #isAsciiOnly()}. */
     abstract Rope withEncoding7bit(Encoding newEncoding, ConditionProfile bytesNotNull);
@@ -185,4 +191,14 @@ public abstract class Rope implements Comparable<Rope> {
         return RopeOperations.decodeRope(this);
     }
 
+    private LeafRope copyIntoLeaf() {
+        byte[] bytes = getBytes();
+        if (isAsciiOnly()) {
+            return new AsciiOnlyLeafRope(bytes, encoding);
+        } else if (RopeOperations.isInvalid(bytes, encoding)) {
+            return new InvalidLeafRope(bytes, encoding, characterLength());
+        } else {
+            return new ValidLeafRope(bytes, encoding, characterLength());
+        }
+    }
 }
