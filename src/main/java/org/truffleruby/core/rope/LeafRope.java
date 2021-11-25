@@ -9,6 +9,7 @@
  */
 package org.truffleruby.core.rope;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import org.jcodings.Encoding;
 
 import static org.truffleruby.core.rope.CodeRange.CR_BROKEN;
@@ -37,16 +38,22 @@ public abstract class LeafRope extends ManagedRope {
         }
     }
 
-    @Override
-    protected ManagedRope getShared() {
-        if (!isReadOnly) {
-            return clone(false);
-        } else {
-            return this;
-        }
+    protected final boolean isReadOnly() {
+        return isReadOnly;
     }
 
-    protected abstract LeafRope clone(boolean isReadOnly);
+    protected final LeafRope clone(boolean isReadOnly) {
+        if (this instanceof AsciiOnlyLeafRope) {
+            return new AsciiOnlyLeafRope(bytes, encoding);
+        } else if (this instanceof ValidLeafRope) {
+            return new ValidLeafRope(isReadOnly, bytes.clone(), encoding, characterLength());
+        } else if (this instanceof InvalidLeafRope) {
+            return new InvalidLeafRope(bytes, encoding, characterLength());
+        } else {
+            CompilerDirectives.transferToInterpreterAndInvalidate();
+            throw new UnsupportedOperationException("clone() for " + this.getClass());
+        }
+    }
 
     public void replaceRange(int spliceByteIndex, byte[] srcBytes, CodeRange srcCodeRange) {
         assert !isReadOnly : "LeafRope not mutable!";

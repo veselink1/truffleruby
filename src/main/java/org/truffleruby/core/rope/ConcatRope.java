@@ -78,11 +78,6 @@ public class ConcatRope extends ManagedRope {
     }
 
     @Override
-    protected ManagedRope getShared() {
-        return this;
-    }
-
-    @Override
     Rope withEncoding7bit(Encoding newEncoding, ConditionProfile bytesNotNull) {
         assert getCodeRange() == CodeRange.CR_7BIT;
         return withEncoding(newEncoding, CodeRange.CR_7BIT, characterLength(), bytesNotNull);

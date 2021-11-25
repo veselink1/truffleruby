@@ -29,7 +29,16 @@ public abstract class ManagedRope extends Rope {
         this.characterLength = characterLength;
     }
 
-    protected abstract ManagedRope getShared();
+    protected final ManagedRope getShared() {
+        if (this instanceof LeafRope) {
+            if (!((LeafRope) this).isReadOnly()) {
+                return ((LeafRope) this).clone(false);
+            } else {
+                return this;
+            }
+        }
+        return this;
+    }
 
     @Override
     public final CodeRange getCodeRange() {

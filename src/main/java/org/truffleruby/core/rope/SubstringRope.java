@@ -48,11 +48,6 @@ public class SubstringRope extends ManagedRope {
     }
 
     @Override
-    protected ManagedRope getShared() {
-        return this;
-    }
-
-    @Override
     Rope withEncoding7bit(Encoding newEncoding, ConditionProfile bytesNotNull) {
         assert getCodeRange() == CodeRange.CR_7BIT;
         return new SubstringRope(

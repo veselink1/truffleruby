@@ -75,9 +75,4 @@ public class RepeatingRope extends ManagedRope {
     public int getTimes() {
         return times;
     }
-
-    @Override
-    protected ManagedRope getShared() {
-        return this;
-    }
 }

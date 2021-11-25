@@ -35,11 +35,6 @@ public class LazyIntRope extends ManagedRope {
         assert Integer.toString(value).length() == length : value + " " + length;
     }
 
-    @Override
-    protected ManagedRope getShared() {
-        return this;
-    }
-
     // @formatter:off
     @CompilationFinal(dimensions = 1) private static final long[] LENGTH_TABLE = {
             0x100000000L, 0x1FFFFFFF6L, 0x1FFFFFFF6L,

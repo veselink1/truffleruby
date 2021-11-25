@@ -21,7 +21,7 @@ public class AsciiOnlyLeafRope extends LeafRope {
         this(true, bytes, encoding);
     }
 
-    private AsciiOnlyLeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding) {
+    AsciiOnlyLeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding) {
         super(isReadOnly, bytes, encoding, CodeRange.CR_7BIT, bytes.length);
 
         assert RopeOperations.isAsciiOnly(bytes, encoding) : "MBC string incorrectly marked as CR_7BIT";
@@ -36,10 +36,5 @@ public class AsciiOnlyLeafRope extends LeafRope {
     Rope withBinaryEncoding(ConditionProfile bytesNotNull) {
         CompilerDirectives.transferToInterpreterAndInvalidate();
         throw new UnsupportedOperationException("Must only be called for CR_VALID Strings");
-    }
-
-    @Override
-    protected LeafRope clone(boolean isReadOnly) {
-        return new AsciiOnlyLeafRope(bytes, encoding);
     }
 }

@@ -22,7 +22,7 @@ public class ValidLeafRope extends LeafRope {
         this(true, bytes, encoding, characterLength);
     }
 
-    private ValidLeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding, int characterLength) {
+    ValidLeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding, int characterLength) {
         super(isReadOnly, bytes, encoding, CodeRange.CR_VALID, characterLength);
 
         assert !RopeOperations.isAsciiOnly(bytes, encoding) : "ASCII-only string incorrectly marked as CR_VALID";
@@ -38,10 +38,5 @@ public class ValidLeafRope extends LeafRope {
     @Override
     Rope withBinaryEncoding(ConditionProfile bytesNotNull) {
         return new ValidLeafRope(getRawBytes(), ASCIIEncoding.INSTANCE, byteLength());
-    }
-
-    @Override
-    protected LeafRope clone(boolean isReadOnly) {
-        return new ValidLeafRope(isReadOnly, bytes.clone(), encoding, characterLength());
     }
 }
