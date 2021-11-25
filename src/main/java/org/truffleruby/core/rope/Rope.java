@@ -39,9 +39,6 @@ public abstract class Rope implements Comparable<Rope> {
     /// Returns a rope representing the same string. The returned rope is guaranteed to not share mutable state with
     /// any other rope instance.
     public LeafRope getMutable() {
-        if (this instanceof LeafRope) {
-            return ((LeafRope) this).clone(false);
-        }
         return copyIntoLeaf();
     }
 
@@ -195,13 +192,13 @@ public abstract class Rope implements Comparable<Rope> {
     }
 
     private LeafRope copyIntoLeaf() {
-        byte[] bytes = getBytes();
+        byte[] bytes = getBytesCopy();
         if (isAsciiOnly()) {
-            return new AsciiOnlyLeafRope(bytes, encoding);
+            return new AsciiOnlyLeafRope(false, bytes, encoding);
         } else if (RopeOperations.isInvalid(bytes, encoding)) {
-            return new InvalidLeafRope(bytes, encoding, characterLength());
+            return new InvalidLeafRope(false, bytes, encoding, characterLength());
         } else {
-            return new ValidLeafRope(bytes, encoding, characterLength());
+            return new ValidLeafRope(false, bytes, encoding, characterLength());
         }
     }
 }

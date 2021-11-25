@@ -32,7 +32,7 @@ public abstract class ManagedRope extends Rope {
     protected final ManagedRope getShared() {
         if (this instanceof LeafRope) {
             if (!((LeafRope) this).isReadOnly()) {
-                return ((LeafRope) this).clone(false);
+                return ((LeafRope) this).clone(true);
             } else {
                 return this;
             }
