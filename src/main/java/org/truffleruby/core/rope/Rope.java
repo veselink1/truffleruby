@@ -44,6 +44,10 @@ public abstract class Rope implements Comparable<Rope> {
         return copyIntoLeaf();
     }
 
+    public LeafRope getMutable(ConditionProfile alreadyMutableProfile) {
+        return getMutable();
+    }
+
     /** Only used internally by WithEncodingNode. Returns a Rope with the given Encoding. Both the original and new
      * Encodings must be ASCII-compatible and the rope must be {@link #isAsciiOnly()}. */
     abstract Rope withEncoding7bit(Encoding newEncoding, ConditionProfile bytesNotNull);
@@ -193,7 +197,7 @@ public abstract class Rope implements Comparable<Rope> {
         return RopeOperations.decodeRope(this);
     }
 
-    private LeafRope copyIntoLeaf() {
+    private final LeafRope copyIntoLeaf() {
         byte[] bytes = getBytesCopy();
         if (isAsciiOnly()) {
             return new AsciiOnlyLeafRope(false, bytes, encoding);

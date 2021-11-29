@@ -10,6 +10,7 @@
 package org.truffleruby.core.rope;
 
 import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.profiles.ConditionProfile;
 import org.jcodings.Encoding;
 
 import static org.truffleruby.core.rope.CodeRange.CR_BROKEN;
@@ -38,6 +39,15 @@ public abstract class LeafRope extends ManagedRope {
         }
     }
 
+    @Override
+    public LeafRope getMutable(ConditionProfile alreadyMutableProfile) {
+        if (alreadyMutableProfile.profile(!isReadOnly)) {
+            return this;
+        } else {
+            return clone(false);
+        }
+    }
+
     protected final boolean isReadOnly() {
         return isReadOnly;
     }
@@ -54,6 +64,7 @@ public abstract class LeafRope extends ManagedRope {
             throw new UnsupportedOperationException("clone() for " + this.getClass());
         }
     }
+
 
     public void replaceRange(int spliceByteIndex, byte[] srcBytes, CodeRange srcCodeRange) {
         assert !isReadOnly : this.getClass() + " not mutable!";

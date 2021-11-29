@@ -29,6 +29,9 @@ public abstract class ManagedRope extends Rope {
         this.characterLength = characterLength;
     }
 
+    /// TODO
+    /// Since this method is going to get called via a MethodCallTarget,
+    /// it must not be virtual.
     protected final ManagedRope getShared() {
         if (this instanceof LeafRope) {
             if (!((LeafRope) this).isReadOnly()) {
