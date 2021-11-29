@@ -44,11 +44,11 @@ public abstract class LeafRope extends ManagedRope {
 
     protected final LeafRope clone(boolean isReadOnly) {
         if (this instanceof AsciiOnlyLeafRope) {
-            return new AsciiOnlyLeafRope(bytes, encoding);
+            return new AsciiOnlyLeafRope(isReadOnly, bytes, encoding);
         } else if (this instanceof ValidLeafRope) {
             return new ValidLeafRope(isReadOnly, bytes.clone(), encoding, characterLength());
         } else if (this instanceof InvalidLeafRope) {
-            return new InvalidLeafRope(bytes, encoding, characterLength());
+            return new InvalidLeafRope(isReadOnly, bytes, encoding, characterLength());
         } else {
             CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new UnsupportedOperationException("clone() for " + this.getClass());
@@ -56,7 +56,7 @@ public abstract class LeafRope extends ManagedRope {
     }
 
     public void replaceRange(int spliceByteIndex, byte[] srcBytes, CodeRange srcCodeRange) {
-        assert !isReadOnly : "LeafRope not mutable!";
+        assert !isReadOnly : this.getClass() + " not mutable!";
         codeRange = commonCodeRange(getCodeRange(), srcCodeRange);
         System.arraycopy(srcBytes, 0, this.bytes, spliceByteIndex, srcBytes.length);
     }

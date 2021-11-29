@@ -39,6 +39,8 @@ public abstract class Rope implements Comparable<Rope> {
     /// Returns a rope representing the same string. The returned rope is guaranteed to not share mutable state with
     /// any other rope instance.
     public LeafRope getMutable() {
+        // LeafRopes that support mutability should override this and
+        // return the same instance.
         return copyIntoLeaf();
     }
 
