@@ -25,7 +25,11 @@ public class ValidLeafRope extends LeafRope {
     ValidLeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding, int characterLength) {
         super(isReadOnly, bytes, encoding, CodeRange.CR_VALID, characterLength);
 
-        assert !RopeOperations.isAsciiOnly(bytes, encoding) : "ASCII-only string incorrectly marked as CR_VALID";
+        // It makes sense to use a ValidLeafRope node with ASCII-compatible encoding
+        // with code range set to CR_VALID even if the actual code range is CR_7BIT,
+        // but only when the node is mutable (because we expect to be replacing code points).
+        assert !isReadOnly ||
+                !RopeOperations.isAsciiOnly(bytes, encoding) : "ASCII-only string incorrectly marked as CR_VALID";
         assert !RopeOperations.isInvalid(bytes, encoding) : "Broken string incorrectly marked as CR_VALID";
     }
 

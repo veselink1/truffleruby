@@ -5164,16 +5164,21 @@ public abstract class StringNodes {
         @Specialization(guards = {
                 "libOther.isRubyString(other)",
                 "ropeByteLengthEquals(libOther.getRope(other), byteCountToReplace)",
+                "encodingsCompatible(string.getRope().getEncoding(), libOther.getRope(other).getEncoding())"
         })
         protected RubyString spliceExactReplace(
                 RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
                 @Cached ConditionProfile alreadyMutableProfile,
+                @Cached ConditionProfile sameCodeRangeProfile,
                 @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
+
+            Rope rope = string.getRope();
             Rope otherRope = libOther.getRope(other);
-            LeafRope newRope = string.getRope().getMutable(alreadyMutableProfile);
+            CodeRange outCodeRange = CodeRange.commonCodeRange(rope.getCodeRange(), otherRope.getCodeRange());
+            LeafRope newRope = rope.getMutable(outCodeRange, alreadyMutableProfile);
 
             newRope.replaceRange(spliceByteIndex, otherRope.getBytes(), otherRope.getCodeRange());
-            string.setRope(newRope);
+            string.setRope(newRope, rubyEncoding);
 
             return string;
         }
@@ -5249,6 +5254,20 @@ public abstract class StringNodes {
 
         protected boolean ropeByteLengthEquals(Rope rope, int byteLength) {
             return rope.byteLength() == byteLength;
+        }
+
+        protected boolean encodingsCompatible(Encoding enc, Encoding otherEnc) {
+            // The encodings are compatible if they are either the same encoding.
+            if (enc == otherEnc) {
+                return true;
+            }
+
+            // Or if they are both ASCII-compatible.
+            if (!enc.isAsciiCompatible()) {
+                return false;
+            }
+
+            return otherEnc.isAsciiCompatible();
         }
 
         protected boolean indexAtStartBound(int index) {

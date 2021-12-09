@@ -24,7 +24,11 @@ public class InvalidLeafRope extends LeafRope {
     InvalidLeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding, int characterLength) {
         super(isReadOnly, bytes, encoding, CodeRange.CR_BROKEN, characterLength);
 
-        assert RopeOperations.isInvalid(bytes, encoding) : "valid string incorrectly marked as CR_BROKEN";
+        // It makes sense to use an InvalidLeafRope node with code range set to
+        // CR_BROKEN even if the actual code range is valid, but only when the
+        // node is mutable (because we expect to be replacing code points).
+        assert !isReadOnly ||
+                RopeOperations.isInvalid(bytes, encoding) : "valid string incorrectly marked as CR_BROKEN";
     }
 
     @Override

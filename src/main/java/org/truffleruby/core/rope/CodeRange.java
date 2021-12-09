@@ -52,4 +52,17 @@ public enum CodeRange {
                 throw new UnsupportedOperationException("Don't know how to convert code range: " + codeRange);
         }
     }
+
+    public static CodeRange commonCodeRange(CodeRange first, CodeRange second) {
+        if (first == second) {
+            return first;
+        }
+
+        if ((first == CR_BROKEN) || (second == CR_BROKEN)) {
+            return CR_BROKEN;
+        }
+
+        // If we get this far, one must be CR_7BIT and the other must be CR_VALID, so promote to the more general code range.
+        return CR_VALID;
+    }
 }

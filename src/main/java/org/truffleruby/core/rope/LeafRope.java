@@ -13,9 +13,6 @@ import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import org.jcodings.Encoding;
 
-import static org.truffleruby.core.rope.CodeRange.CR_BROKEN;
-import static org.truffleruby.core.rope.CodeRange.CR_VALID;
-
 public abstract class LeafRope extends ManagedRope {
 
     private final boolean isReadOnly;
@@ -31,20 +28,20 @@ public abstract class LeafRope extends ManagedRope {
     }
 
     @Override
-    public LeafRope getMutable() {
+    public LeafRope getMutable(CodeRange outCodeRange) {
         if (!isReadOnly) {
             return this;
         } else {
-            return clone(false);
+            return getMutableLeaf(outCodeRange);
         }
     }
 
     @Override
-    public LeafRope getMutable(ConditionProfile alreadyMutableProfile) {
+    public LeafRope getMutable(CodeRange outCodeRange, ConditionProfile alreadyMutableProfile) {
         if (alreadyMutableProfile.profile(!isReadOnly)) {
             return this;
         } else {
-            return clone(false);
+            return getMutableLeaf(outCodeRange);
         }
     }
 
@@ -52,36 +49,43 @@ public abstract class LeafRope extends ManagedRope {
         return isReadOnly;
     }
 
-    protected final LeafRope clone(boolean isReadOnly) {
+
+    final LeafRope getSharedLeaf() {
+        if (isReadOnly) {
+            return this;
+        }
+
         if (this instanceof AsciiOnlyLeafRope) {
-            return new AsciiOnlyLeafRope(isReadOnly, bytes, encoding);
+            return new AsciiOnlyLeafRope(true, getBytesCopy(), encoding);
         } else if (this instanceof ValidLeafRope) {
-            return new ValidLeafRope(isReadOnly, bytes.clone(), encoding, characterLength());
+            return new ValidLeafRope(true, getBytesCopy(), encoding, characterLength());
         } else if (this instanceof InvalidLeafRope) {
-            return new InvalidLeafRope(isReadOnly, bytes, encoding, characterLength());
+            return new InvalidLeafRope(true, getBytesCopy(), encoding, characterLength());
         } else {
             CompilerDirectives.transferToInterpreterAndInvalidate();
-            throw new UnsupportedOperationException("clone() for " + this.getClass());
+            throw new UnsupportedOperationException(
+                    "getReadOnlyDuplicate(): unsupported target class " + this.getClass());
         }
     }
 
+    final LeafRope getMutableLeaf(CodeRange outCodeRange) {
+        switch (outCodeRange) {
+            case CodeRange.CR_7BIT:
+                return new AsciiOnlyLeafRope(false, bytes, encoding);
+            case CodeRange.CR_VALID:
+                return new ValidLeafRope(false, bytes, encoding, characterLength());
+            case CodeRange.CR_BROKEN:
+                return new InvalidLeafRope(false, bytes, encoding, characterLength());
+            default:
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                throw new UnsupportedOperationException("getMutableLeaf(): outCodeRange cannot be: " + outCodeRange);
+        }
+    }
 
     public void replaceRange(int spliceByteIndex, byte[] srcBytes, CodeRange srcCodeRange) {
         assert !isReadOnly : this.getClass() + " not mutable!";
-        codeRange = commonCodeRange(getCodeRange(), srcCodeRange);
+        assert getCodeRange() == CodeRange.commonCodeRange(getCodeRange(), srcCodeRange) : "Cannot replace " +
+                getCodeRange() + " bytes with " + srcCodeRange + "!";
         System.arraycopy(srcBytes, 0, this.bytes, spliceByteIndex, srcBytes.length);
-    }
-
-    private static CodeRange commonCodeRange(CodeRange first, CodeRange second) {
-        if (first == second) {
-            return first;
-        }
-
-        if ((first == CR_BROKEN) || (second == CR_BROKEN)) {
-            return CR_BROKEN;
-        }
-
-        // If we get this far, one must be CR_7BIT and the other must be CR_VALID, so promote to the more general code range.
-        return CR_VALID;
     }
 }

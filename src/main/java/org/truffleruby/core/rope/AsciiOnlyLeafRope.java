@@ -29,6 +29,7 @@ public class AsciiOnlyLeafRope extends LeafRope {
 
     @Override
     Rope withEncoding7bit(Encoding newEncoding, ConditionProfile bytesNotNull) {
+        // TODO: Do I need defensively copy here?
         return new AsciiOnlyLeafRope(getRawBytes(), newEncoding);
     }
 

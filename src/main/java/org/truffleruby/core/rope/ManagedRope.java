@@ -34,11 +34,7 @@ public abstract class ManagedRope extends Rope {
     /// it must not be virtual.
     protected final ManagedRope getShared() {
         if (this instanceof LeafRope) {
-            if (!((LeafRope) this).isReadOnly()) {
-                return ((LeafRope) this).clone(true);
-            } else {
-                return this;
-            }
+            return ((LeafRope) this).getSharedLeaf();
         }
         return this;
     }

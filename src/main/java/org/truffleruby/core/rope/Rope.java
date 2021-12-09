@@ -16,7 +16,12 @@ import java.util.List;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import org.jcodings.Encoding;
 
+import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
+
+import static org.truffleruby.core.rope.CodeRange.CR_7BIT;
+import static org.truffleruby.core.rope.CodeRange.CR_BROKEN;
+import static org.truffleruby.core.rope.CodeRange.CR_VALID;
 
 public abstract class Rope implements Comparable<Rope> {
 
@@ -38,14 +43,14 @@ public abstract class Rope implements Comparable<Rope> {
 
     /// Returns a rope representing the same string. The returned rope is guaranteed to not share mutable state with
     /// any other rope instance.
-    public LeafRope getMutable() {
+    public LeafRope getMutable(CodeRange outCodeRange) {
         // LeafRopes that support mutability should override this and
         // return the same instance.
-        return copyIntoLeaf();
+        return copyIntoLeaf(outCodeRange);
     }
 
-    public LeafRope getMutable(ConditionProfile alreadyMutableProfile) {
-        return getMutable();
+    public LeafRope getMutable(CodeRange outCodeRange, ConditionProfile alreadyMutableProfile) {
+        return getMutable(outCodeRange);
     }
 
     /** Only used internally by WithEncodingNode. Returns a Rope with the given Encoding. Both the original and new
@@ -197,14 +202,18 @@ public abstract class Rope implements Comparable<Rope> {
         return RopeOperations.decodeRope(this);
     }
 
-    private final LeafRope copyIntoLeaf() {
-        byte[] bytes = getBytesCopy();
-        if (isAsciiOnly()) {
-            return new AsciiOnlyLeafRope(false, bytes, encoding);
-        } else if (RopeOperations.isInvalid(bytes, encoding)) {
-            return new InvalidLeafRope(false, bytes, encoding, characterLength());
-        } else {
-            return new ValidLeafRope(false, bytes, encoding, characterLength());
+    private final LeafRope copyIntoLeaf(CodeRange outCodeRange) {
+        switch (outCodeRange) {
+            case CR_7BIT:
+                return new AsciiOnlyLeafRope(false, getBytesCopy(), encoding);
+            case CR_VALID:
+                return new ValidLeafRope(false, getBytesCopy(), encoding, characterLength());
+            case CR_BROKEN:
+                return new InvalidLeafRope(false, getBytesCopy(), encoding, characterLength());
+            default:
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                throw new UnsupportedOperationException(
+                        "Don't know how to create rope with code range: " + outCodeRange);
         }
     }
 }
