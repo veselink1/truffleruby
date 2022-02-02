@@ -9,6 +9,7 @@
  */
 package org.truffleruby.core.rope;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import org.jcodings.Encoding;
@@ -29,19 +30,22 @@ public abstract class LeafRope extends ManagedRope {
 
     @Override
     public LeafRope getMutable(CodeRange outCodeRange) {
+        CompilerAsserts.neverPartOfCompilation(
+                "Use the other overload of getMutable instead, or add a @TruffleBoundary.");
         if (!isReadOnly) {
             return this;
         } else {
-            return getMutableLeaf(outCodeRange);
+            return createMutableLeaf(outCodeRange);
         }
     }
 
     @Override
-    public LeafRope getMutable(CodeRange outCodeRange, ConditionProfile alreadyMutableProfile) {
+    public LeafRope getMutable(CodeRange outCodeRange, RopeNodes.BytesNode bytesNode,
+            ConditionProfile alreadyMutableProfile) {
         if (alreadyMutableProfile.profile(!isReadOnly)) {
             return this;
         } else {
-            return getMutableLeaf(outCodeRange);
+            return createMutableLeaf(outCodeRange, bytesNode);
         }
     }
 
@@ -50,11 +54,15 @@ public abstract class LeafRope extends ManagedRope {
     }
 
 
-    final LeafRope getSharedLeaf() {
+    protected final LeafRope createSharedLeaf() {
         if (isReadOnly) {
             return this;
         }
 
+        // Make it log the source line when here
+
+        // This mutable LeafRope is being used in a composite rope.
+        CompilerDirectives.transferToInterpreterAndInvalidate();
         if (this instanceof AsciiOnlyLeafRope) {
             return new AsciiOnlyLeafRope(true, getBytesCopy(), encoding);
         } else if (this instanceof ValidLeafRope) {
@@ -62,20 +70,34 @@ public abstract class LeafRope extends ManagedRope {
         } else if (this instanceof InvalidLeafRope) {
             return new InvalidLeafRope(true, getBytesCopy(), encoding, characterLength());
         } else {
-            CompilerDirectives.transferToInterpreterAndInvalidate();
             throw new UnsupportedOperationException(
                     "getReadOnlyDuplicate(): unsupported target class " + this.getClass());
         }
     }
 
-    final LeafRope getMutableLeaf(CodeRange outCodeRange) {
+    protected final LeafRope createMutableLeaf(CodeRange outCodeRange) {
         switch (outCodeRange) {
-            case CodeRange.CR_7BIT:
-                return new AsciiOnlyLeafRope(false, bytes, encoding);
-            case CodeRange.CR_VALID:
-                return new ValidLeafRope(false, bytes, encoding, characterLength());
-            case CodeRange.CR_BROKEN:
-                return new InvalidLeafRope(false, bytes, encoding, characterLength());
+            case CR_7BIT:
+                return new AsciiOnlyLeafRope(false, getBytesCopy(), encoding);
+            case CR_VALID:
+                return new ValidLeafRope(false, getBytesCopy(), encoding, characterLength());
+            case CR_BROKEN:
+                return new InvalidLeafRope(false, getBytesCopy(), encoding, characterLength());
+            default:
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                throw new UnsupportedOperationException("getMutableLeaf(): outCodeRange cannot be: " + outCodeRange);
+        }
+    }
+
+
+    protected final LeafRope createMutableLeaf(CodeRange outCodeRange, RopeNodes.BytesNode bytesNode) {
+        switch (outCodeRange) {
+            case CR_7BIT:
+                return new AsciiOnlyLeafRope(false, bytesNode.execute(this), encoding);
+            case CR_VALID:
+                return new ValidLeafRope(false, bytesNode.execute(this), encoding, characterLength());
+            case CR_BROKEN:
+                return new InvalidLeafRope(false, bytesNode.execute(this), encoding, characterLength());
             default:
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 throw new UnsupportedOperationException("getMutableLeaf(): outCodeRange cannot be: " + outCodeRange);

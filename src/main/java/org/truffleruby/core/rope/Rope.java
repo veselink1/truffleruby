@@ -13,6 +13,7 @@ import java.lang.management.ManagementFactory;
 import java.util.Arrays;
 import java.util.List;
 
+import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.profiles.ConditionProfile;
 import org.jcodings.Encoding;
 
@@ -44,13 +45,16 @@ public abstract class Rope implements Comparable<Rope> {
     /// Returns a rope representing the same string. The returned rope is guaranteed to not share mutable state with
     /// any other rope instance.
     public LeafRope getMutable(CodeRange outCodeRange) {
-        // LeafRopes that support mutability should override this and
-        // return the same instance.
+        // Technically, this method can participate in partial evaluation, but since the
+        // override by LeafRope cannot, it is best to guard this implementation as well, for consistency.
+        CompilerAsserts.neverPartOfCompilation(
+                "Use the other overload of getMutable instead, or add a @TruffleBoundary.");
         return copyIntoLeaf(outCodeRange);
     }
 
-    public LeafRope getMutable(CodeRange outCodeRange, ConditionProfile alreadyMutableProfile) {
-        return getMutable(outCodeRange);
+    public LeafRope getMutable(CodeRange outCodeRange, RopeNodes.BytesNode bytesNode,
+            ConditionProfile alreadyMutableProfile) {
+        return copyIntoLeaf(outCodeRange);
     }
 
     /** Only used internally by WithEncodingNode. Returns a Rope with the given Encoding. Both the original and new

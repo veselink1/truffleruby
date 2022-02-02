@@ -5168,6 +5168,7 @@ public abstract class StringNodes {
         })
         protected RubyString spliceExactReplace(
                 RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
+                @Cached BytesNode bytesNode,
                 @Cached ConditionProfile alreadyMutableProfile,
                 @Cached ConditionProfile sameCodeRangeProfile,
                 @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
@@ -5175,7 +5176,7 @@ public abstract class StringNodes {
             Rope rope = string.getRope();
             Rope otherRope = libOther.getRope(other);
             CodeRange outCodeRange = CodeRange.commonCodeRange(rope.getCodeRange(), otherRope.getCodeRange());
-            LeafRope newRope = rope.getMutable(outCodeRange, alreadyMutableProfile);
+            LeafRope newRope = rope.getMutable(outCodeRange, bytesNode, alreadyMutableProfile);
 
             newRope.replaceRange(spliceByteIndex, otherRope.getBytes(), otherRope.getCodeRange());
             string.setRope(newRope, rubyEncoding);
