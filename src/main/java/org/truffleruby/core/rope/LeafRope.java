@@ -9,9 +9,7 @@
  */
 package org.truffleruby.core.rope;
 
-import com.oracle.truffle.api.CompilerAsserts;
 import com.oracle.truffle.api.CompilerDirectives;
-import com.oracle.truffle.api.profiles.ConditionProfile;
 import org.jcodings.Encoding;
 
 public abstract class LeafRope extends ManagedRope {
@@ -28,31 +26,9 @@ public abstract class LeafRope extends ManagedRope {
         return getRawBytes()[index];
     }
 
-    @Override
-    public LeafRope getMutable(CodeRange outCodeRange) {
-        CompilerAsserts.neverPartOfCompilation(
-                "Use the other overload of getMutable instead, or add a @TruffleBoundary.");
-        if (!isReadOnly) {
-            return this;
-        } else {
-            return createMutableLeaf(outCodeRange);
-        }
-    }
-
-    @Override
-    public LeafRope getMutable(CodeRange outCodeRange, RopeNodes.BytesNode bytesNode,
-            ConditionProfile alreadyMutableProfile) {
-        if (alreadyMutableProfile.profile(!isReadOnly)) {
-            return this;
-        } else {
-            return createMutableLeaf(outCodeRange, bytesNode);
-        }
-    }
-
     protected final boolean isReadOnly() {
         return isReadOnly;
     }
-
 
     protected final LeafRope createSharedLeaf() {
         if (isReadOnly) {
@@ -72,35 +48,6 @@ public abstract class LeafRope extends ManagedRope {
         } else {
             throw new UnsupportedOperationException(
                     "getReadOnlyDuplicate(): unsupported target class " + this.getClass());
-        }
-    }
-
-    protected final LeafRope createMutableLeaf(CodeRange outCodeRange) {
-        switch (outCodeRange) {
-            case CR_7BIT:
-                return new AsciiOnlyLeafRope(false, getBytesCopy(), encoding);
-            case CR_VALID:
-                return new ValidLeafRope(false, getBytesCopy(), encoding, characterLength());
-            case CR_BROKEN:
-                return new InvalidLeafRope(false, getBytesCopy(), encoding, characterLength());
-            default:
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                throw new UnsupportedOperationException("getMutableLeaf(): outCodeRange cannot be: " + outCodeRange);
-        }
-    }
-
-
-    protected final LeafRope createMutableLeaf(CodeRange outCodeRange, RopeNodes.BytesNode bytesNode) {
-        switch (outCodeRange) {
-            case CR_7BIT:
-                return new AsciiOnlyLeafRope(false, bytesNode.execute(this), encoding);
-            case CR_VALID:
-                return new ValidLeafRope(false, bytesNode.execute(this), encoding, characterLength());
-            case CR_BROKEN:
-                return new InvalidLeafRope(false, bytesNode.execute(this), encoding, characterLength());
-            default:
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                throw new UnsupportedOperationException("getMutableLeaf(): outCodeRange cannot be: " + outCodeRange);
         }
     }
 

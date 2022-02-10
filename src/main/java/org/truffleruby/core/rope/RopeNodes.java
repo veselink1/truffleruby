@@ -1839,4 +1839,79 @@ public abstract class RopeNodes {
             return rope instanceof SubstringRope;
         }
     }
+
+    public abstract static class GetMutableRopeNode extends RubyBaseNode {
+        public static GetMutableRopeNode create() {
+            return RopeNodesFactory.GetMutableRopeNodeGen.create();
+        }
+
+        public abstract LeafRope execute(Rope rope, CodeRange outCodeRange);
+
+        @Specialization
+        protected LeafRope fromAsciiLeaf(AsciiOnlyLeafRope rope, CodeRange outCodeRange,
+                @Cached @Shared("alreadyMutableProfile") ConditionProfile alreadyMutableProfile,
+                @Cached @Shared("bytesNode") BytesNode bytesNode) {
+            if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
+                return rope;
+            } else {
+                return new AsciiOnlyLeafRope(false, bytesNode.execute(rope), rope.encoding);
+            }
+        }
+
+        @Specialization
+        protected LeafRope fromValidleaf(ValidLeafRope rope, CodeRange outCodeRange,
+                @Cached @Shared("alreadyMutableProfile") ConditionProfile alreadyMutableProfile,
+                @Cached @Shared("bytesNode") BytesNode bytesNode) {
+            if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
+                return rope;
+            } else {
+                return new ValidLeafRope(false, bytesNode.execute(rope), rope.encoding, rope.characterLength());
+            }
+        }
+
+        @Specialization
+        protected LeafRope fromInvalidLeaf(InvalidLeafRope rope, CodeRange outCodeRange,
+                @Cached @Shared("alreadyMutableProfile") ConditionProfile alreadyMutableProfile,
+                @Cached @Shared("bytesNode") BytesNode bytesNode) {
+            if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
+                return rope;
+            } else {
+                return new InvalidLeafRope(false, bytesNode.execute(rope), rope.encoding, rope.characterLength());
+            }
+        }
+
+        @Specialization(guards = { "is7Bit(outCodeRange)" })
+        protected LeafRope fromAsciiNonLeaf(Rope rope, CodeRange outCodeRange,
+                @Cached @Shared("bytesNode") BytesNode bytesNode) {
+            return new AsciiOnlyLeafRope(false, bytesNode.execute(rope), rope.encoding);
+        }
+
+        @Specialization(guards = { "isValid(outCodeRange)" })
+        protected LeafRope fromValidNonLeaf(Rope rope, CodeRange outCodeRange,
+                @Cached @Shared("bytesNode") BytesNode bytesNode) {
+            return new ValidLeafRope(false, bytesNode.execute(rope), rope.encoding, rope.characterLength());
+        }
+
+        @Specialization(guards = { "isBroken(outCodeRange)" })
+        protected LeafRope fromInvalidNonLeaf(Rope rope, CodeRange outCodeRange,
+                @Cached @Shared("bytesNode") BytesNode bytesNode) {
+            return new InvalidLeafRope(false, bytesNode.execute(rope), rope.encoding, rope.characterLength());
+        }
+
+        protected static boolean is7Bit(CodeRange codeRange) {
+            return codeRange == CR_7BIT;
+        }
+
+        protected static boolean isValid(CodeRange codeRange) {
+            return codeRange == CR_VALID;
+        }
+
+        protected static boolean isBroken(CodeRange codeRange) {
+            return codeRange == CR_BROKEN;
+        }
+
+        protected static boolean isUnknown(CodeRange codeRange) {
+            return codeRange == CR_UNKNOWN;
+        }
+    }
 }
