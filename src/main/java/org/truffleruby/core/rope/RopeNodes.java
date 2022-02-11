@@ -39,6 +39,7 @@ import org.truffleruby.core.rope.RopeNodesFactory.CompareRopesNodeGen;
 import org.truffleruby.core.rope.RopeNodesFactory.SetByteNodeGen;
 import org.truffleruby.core.string.StringAttributes;
 import org.truffleruby.core.string.StringSupport;
+import org.truffleruby.core.support.Hypothesis;
 import org.truffleruby.language.NotProvided;
 import org.truffleruby.language.RubyBaseNode;
 import org.truffleruby.language.control.RaiseException;
@@ -1918,6 +1919,11 @@ public abstract class RopeNodes {
     }
 
     public abstract static class GetMutableRopeNode extends RubyBaseNode {
+
+        // We hypothesise that the mutable rope is likely to be reused,
+        // and claim that this is the case in 100 of out of 100 cases.
+        private final Hypothesis reuseHypothesis = new Hypothesis(100, 100);
+
         public static GetMutableRopeNode create() {
             return RopeNodesFactory.GetMutableRopeNodeGen.create();
         }
@@ -1929,8 +1935,10 @@ public abstract class RopeNodes {
                 @Cached @Shared("alreadyMutableProfile") ConditionProfile alreadyMutableProfile,
                 @Cached @Shared("bytesNode") BytesNode bytesNode) {
             if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
+                reuseHypothesis.test(true);
                 return rope;
             } else {
+                reuseHypothesis.test(false);
                 return new AsciiOnlyLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding);
             }
         }
@@ -1940,8 +1948,10 @@ public abstract class RopeNodes {
                 @Cached @Shared("alreadyMutableProfile") ConditionProfile alreadyMutableProfile,
                 @Cached @Shared("bytesNode") BytesNode bytesNode) {
             if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
+                reuseHypothesis.test(true);
                 return rope;
             } else {
+                reuseHypothesis.test(false);
                 return new ValidLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
             }
         }
@@ -1951,8 +1961,10 @@ public abstract class RopeNodes {
                 @Cached @Shared("alreadyMutableProfile") ConditionProfile alreadyMutableProfile,
                 @Cached @Shared("bytesNode") BytesNode bytesNode) {
             if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
+                reuseHypothesis.test(true);
                 return rope;
             } else {
+                reuseHypothesis.test(false);
                 return new InvalidLeafRope(
                         false,
                         bytesNode.execute(rope).clone(),
@@ -1964,18 +1976,21 @@ public abstract class RopeNodes {
         @Specialization(guards = { "is7Bit(outCodeRange)" })
         protected LeafRope fromAsciiNonLeaf(Rope rope, CodeRange outCodeRange,
                 @Cached @Shared("bytesNode") BytesNode bytesNode) {
+            reuseHypothesis.test(false);
             return new AsciiOnlyLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding);
         }
 
         @Specialization(guards = { "isValid(outCodeRange)" })
         protected LeafRope fromValidNonLeaf(Rope rope, CodeRange outCodeRange,
                 @Cached @Shared("bytesNode") BytesNode bytesNode) {
+            reuseHypothesis.test(false);
             return new ValidLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
         }
 
         @Specialization(guards = { "isBroken(outCodeRange)" })
         protected LeafRope fromInvalidNonLeaf(Rope rope, CodeRange outCodeRange,
                 @Cached @Shared("bytesNode") BytesNode bytesNode) {
+            reuseHypothesis.test(false);
             return new InvalidLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
         }
 

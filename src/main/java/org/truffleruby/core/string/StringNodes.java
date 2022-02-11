@@ -180,6 +180,7 @@ import org.truffleruby.core.string.StringNodesFactory.StringEqualNodeGen;
 import org.truffleruby.core.string.StringNodesFactory.StringSubstringPrimitiveNodeFactory;
 import org.truffleruby.core.string.StringNodesFactory.SumNodeFactory;
 import org.truffleruby.core.string.StringSupport.TrTables;
+import org.truffleruby.core.support.Hypothesis;
 import org.truffleruby.core.support.RubyByteArray;
 import org.truffleruby.core.symbol.RubySymbol;
 import org.truffleruby.language.Nil;
@@ -5161,11 +5162,12 @@ public abstract class StringNodes {
     @ImportStatic(StringGuards.class)
     public abstract static class StringSplicePrimitiveNode extends PrimitiveArrayArgumentsNode {
 
-        @Specialization(guards = {
-                "libOther.isRubyString(other)",
-                "ropeByteLengthEquals(libOther.getRope(other), byteCountToReplace)",
-                "encodingsCompatible(string.getRope().getEncoding(), libOther.getRope(other).getEncoding())"
-        })
+        @Specialization(
+                rewriteOn = Hypothesis.Rejected.class,
+                guards = {
+                        "libOther.isRubyString(other)",
+                        "ropeByteLengthEquals(libOther.getRope(other), byteCountToReplace)",
+                        "encodingsCompatible(string.getRope().getEncoding(), libOther.getRope(other).getEncoding())" })
         protected RubyString spliceExactReplace(
                 RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
                 @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
