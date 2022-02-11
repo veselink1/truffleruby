@@ -438,7 +438,8 @@ public abstract class RopeNodes {
         @Specialization(guards = { "!left.isEmpty()", "!right.isEmpty()", "!isCodeRangeBroken(left, right)" })
         protected Rope concat(ManagedRope left, ManagedRope right, Encoding encoding,
                 @Cached ConditionProfile sameCodeRangeProfile,
-                @Cached ConditionProfile brokenCodeRangeProfile) {
+                @Cached ConditionProfile brokenCodeRangeProfile,
+                @Cached GetSharedRopeNode getSharedNode) {
             try {
                 Math.addExact(left.byteLength(), right.byteLength());
             } catch (ArithmeticException e) {
@@ -448,8 +449,8 @@ public abstract class RopeNodes {
             }
 
             return new ConcatRope(
-                    left,
-                    right,
+                    getSharedNode.execute(left),
+                    getSharedNode.execute(right),
                     encoding,
                     commonCodeRange(
                             left.getCodeRange(),
@@ -722,7 +723,8 @@ public abstract class RopeNodes {
         }
 
         @Specialization(guards = { "!isSingleByteString(base)", "times > 1" })
-        protected Rope repeatManaged(ManagedRope base, int times) {
+        protected Rope repeatManaged(ManagedRope base, int times,
+                @Cached GetSharedRopeNode getSharedNode) {
             int byteLength;
             try {
                 byteLength = Math.multiplyExact(base.byteLength(), times);
@@ -734,7 +736,7 @@ public abstract class RopeNodes {
                                 this));
             }
 
-            return new RepeatingRope(base, times, byteLength);
+            return new RepeatingRope(getSharedNode.execute(base), times, byteLength);
         }
 
         @Specialization(guards = { "!isSingleByteString(base)", "times > 1" })
@@ -1840,6 +1842,81 @@ public abstract class RopeNodes {
         }
     }
 
+    public abstract static class GetSharedRopeNode extends RubyBaseNode {
+        public static GetSharedRopeNode create() {
+            return RopeNodesFactory.GetSharedRopeNodeGen.create();
+        }
+
+        public abstract ManagedRope execute(ManagedRope rope);
+
+        @Specialization
+        protected ManagedRope fromAsciiLeaf(AsciiOnlyLeafRope rope,
+                @Cached @Shared("alreadyReadOnlyProfile") ConditionProfile alreadyReadOnlyProfile,
+                @Cached @Shared("bytesNode") BytesNode bytesNode) {
+            if (alreadyReadOnlyProfile.profile(rope.isReadOnly())) {
+                return rope;
+            } else {
+                //                System.err.printf("Allocating immutable leaf (L: %d) at %s%n", rope.byteLength(), getContext()
+                //                        .getCallStack()
+                //                        .getTopMostUserSourceSection(getEncapsulatingSourceSection()));
+                return new AsciiOnlyLeafRope(true, bytesNode.execute(rope).clone(), rope.encoding);
+            }
+        }
+
+        @Specialization
+        protected ManagedRope fromValidleaf(ValidLeafRope rope,
+                @Cached @Shared("alreadyReadOnlyProfile") ConditionProfile alreadyReadOnlyProfile,
+                @Cached @Shared("bytesNode") BytesNode bytesNode) {
+            if (alreadyReadOnlyProfile.profile(rope.isReadOnly())) {
+                //                 System.err.printf("Allocating immutable leaf (L: %d) at %s%n", rope.byteLength(), getContext()
+                //                         .getCallStack()
+                //                         .getTopMostUserSourceSection(getEncapsulatingSourceSection()));
+                return new ValidLeafRope(true, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
+            } else {
+                return rope;
+            }
+        }
+
+        @Specialization
+        protected ManagedRope fromInvalidLeaf(InvalidLeafRope rope,
+                @Cached @Shared("alreadyReadOnlyProfile") ConditionProfile alreadyReadOnlyProfile,
+                @Cached @Shared("bytesNode") BytesNode bytesNode) {
+            if (alreadyReadOnlyProfile.profile(rope.isReadOnly())) {
+                return rope;
+            } else {
+                //                System.err.printf("Allocating immutable leaf (L: %d) at %s%n", rope.byteLength(), getContext()
+                //                        .getCallStack()
+                //                        .getTopMostUserSourceSection(getEncapsulatingSourceSection()));
+                return new InvalidLeafRope(
+                        true,
+                        bytesNode.execute(rope).clone(),
+                        rope.encoding,
+                        rope.characterLength());
+            }
+        }
+
+        @Specialization
+        protected ManagedRope fromOtherRope(ManagedRope rope) {
+            return rope;
+        }
+
+        protected static boolean is7Bit(CodeRange codeRange) {
+            return codeRange == CR_7BIT;
+        }
+
+        protected static boolean isValid(CodeRange codeRange) {
+            return codeRange == CR_VALID;
+        }
+
+        protected static boolean isBroken(CodeRange codeRange) {
+            return codeRange == CR_BROKEN;
+        }
+
+        protected static boolean isUnknown(CodeRange codeRange) {
+            return codeRange == CR_UNKNOWN;
+        }
+    }
+
     public abstract static class GetMutableRopeNode extends RubyBaseNode {
         public static GetMutableRopeNode create() {
             return RopeNodesFactory.GetMutableRopeNodeGen.create();
@@ -1854,7 +1931,7 @@ public abstract class RopeNodes {
             if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
                 return rope;
             } else {
-                return new AsciiOnlyLeafRope(false, bytesNode.execute(rope), rope.encoding);
+                return new AsciiOnlyLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding);
             }
         }
 
@@ -1865,7 +1942,7 @@ public abstract class RopeNodes {
             if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
                 return rope;
             } else {
-                return new ValidLeafRope(false, bytesNode.execute(rope), rope.encoding, rope.characterLength());
+                return new ValidLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
             }
         }
 
@@ -1876,26 +1953,30 @@ public abstract class RopeNodes {
             if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
                 return rope;
             } else {
-                return new InvalidLeafRope(false, bytesNode.execute(rope), rope.encoding, rope.characterLength());
+                return new InvalidLeafRope(
+                        false,
+                        bytesNode.execute(rope).clone(),
+                        rope.encoding,
+                        rope.characterLength());
             }
         }
 
         @Specialization(guards = { "is7Bit(outCodeRange)" })
         protected LeafRope fromAsciiNonLeaf(Rope rope, CodeRange outCodeRange,
                 @Cached @Shared("bytesNode") BytesNode bytesNode) {
-            return new AsciiOnlyLeafRope(false, bytesNode.execute(rope), rope.encoding);
+            return new AsciiOnlyLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding);
         }
 
         @Specialization(guards = { "isValid(outCodeRange)" })
         protected LeafRope fromValidNonLeaf(Rope rope, CodeRange outCodeRange,
                 @Cached @Shared("bytesNode") BytesNode bytesNode) {
-            return new ValidLeafRope(false, bytesNode.execute(rope), rope.encoding, rope.characterLength());
+            return new ValidLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
         }
 
         @Specialization(guards = { "isBroken(outCodeRange)" })
         protected LeafRope fromInvalidNonLeaf(Rope rope, CodeRange outCodeRange,
                 @Cached @Shared("bytesNode") BytesNode bytesNode) {
-            return new InvalidLeafRope(false, bytesNode.execute(rope), rope.encoding, rope.characterLength());
+            return new InvalidLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
         }
 
         protected static boolean is7Bit(CodeRange codeRange) {

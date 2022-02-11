@@ -40,8 +40,9 @@ public class SubstringRope extends ManagedRope {
         // TODO (nirvdrum 07-Jan-16) Verify that this rope is only used for character substrings and not arbitrary byte slices. The former should always have the child's code range while the latter may not.
         super(encoding, codeRange, byteLength, characterLength, null);
         assert !(child instanceof SubstringRope) : child.getClass();
+        assert !(child instanceof LeafRope) || ((LeafRope) child).isReadOnly();
         // TODO(veselink1): overload getShared for slices
-        this.child = child.getShared();
+        this.child = child;
         this.byteOffset = byteOffset;
 
         assert byteLength <= child.byteLength();

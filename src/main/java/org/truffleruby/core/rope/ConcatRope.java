@@ -29,8 +29,8 @@ public class ConcatRope extends ManagedRope {
         public ConcatState(ManagedRope left, ManagedRope right, byte[] bytes) {
             assert bytes == null && left != null && right != null || bytes != null && left == null && right == null;
             if (bytes == null) {
-                this.left = left.getShared();
-                this.right = right.getShared();
+                this.left = left;
+                this.right = right;
                 this.bytes = null;
             } else {
                 this.left = null;
@@ -73,6 +73,8 @@ public class ConcatRope extends ManagedRope {
         super(encoding, codeRange, byteLength, characterLength, bytes);
         assert left != null;
         assert right != null;
+        assert !(left instanceof LeafRope) || ((LeafRope) left).isReadOnly();
+        assert !(right instanceof LeafRope) || ((LeafRope) right).isReadOnly();
         this.left = left;
         this.right = right;
     }

@@ -27,7 +27,8 @@ public class RepeatingRope extends ManagedRope {
                 byteLength,
                 child.characterLength() * times,
                 null);
-        this.child = child.getShared();
+        assert !(child instanceof LeafRope) || ((LeafRope) child).isReadOnly();
+        this.child = child;
         this.times = times;
     }
 

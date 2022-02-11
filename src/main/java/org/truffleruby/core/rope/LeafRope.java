@@ -9,7 +9,6 @@
  */
 package org.truffleruby.core.rope;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import org.jcodings.Encoding;
 
 public abstract class LeafRope extends ManagedRope {
@@ -28,27 +27,6 @@ public abstract class LeafRope extends ManagedRope {
 
     protected final boolean isReadOnly() {
         return isReadOnly;
-    }
-
-    protected final LeafRope createSharedLeaf() {
-        if (isReadOnly) {
-            return this;
-        }
-
-        // Make it log the source line when here
-
-        // This mutable LeafRope is being used in a composite rope.
-        CompilerDirectives.transferToInterpreterAndInvalidate();
-        if (this instanceof AsciiOnlyLeafRope) {
-            return new AsciiOnlyLeafRope(true, getBytesCopy(), encoding);
-        } else if (this instanceof ValidLeafRope) {
-            return new ValidLeafRope(true, getBytesCopy(), encoding, characterLength());
-        } else if (this instanceof InvalidLeafRope) {
-            return new InvalidLeafRope(true, getBytesCopy(), encoding, characterLength());
-        } else {
-            throw new UnsupportedOperationException(
-                    "getReadOnlyDuplicate(): unsupported target class " + this.getClass());
-        }
     }
 
     public void replaceRange(int spliceByteIndex, byte[] srcBytes, CodeRange srcCodeRange) {
