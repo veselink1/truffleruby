@@ -5207,6 +5207,16 @@ public abstract class StringNodes {
         public abstract RubyString execute(RubyString string, Object other, int spliceByteIndex, int byteCountToReplace,
                 RubyEncoding rubyEncoding);
 
+        /** <p>
+         * This implementation subsumes the more generic splice() implementation as well as the implementation enabling
+         * mutable strings. The set of guards is the union of the guards of the two implementation. This implementation
+         * defers to splice(), while also profiling how frequently strings are being reused.
+         * </p>
+         * <p>
+         * When a certain threshold is reached, the node is re-specialized to use the mutable string implementation
+         * where possible.
+         * </p>
+        */
         @Specialization(
                 rewriteOn = RewriteException.class,
                 guards = {
