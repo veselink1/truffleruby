@@ -25,7 +25,7 @@ public abstract class LeafRope extends ManagedRope {
         return getRawBytes()[index];
     }
 
-    protected final boolean isReadOnly() {
+    public final boolean isReadOnly() {
         return isReadOnly;
     }
 

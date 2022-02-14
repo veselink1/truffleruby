@@ -73,6 +73,7 @@ import static org.truffleruby.core.string.StringSupport.MBCLEN_INVALID_P;
 import static org.truffleruby.core.string.StringSupport.MBCLEN_NEEDMORE_P;
 
 import java.io.UnsupportedEncodingException;
+import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 
 import com.oracle.truffle.api.TruffleSafepoint;
@@ -180,7 +181,6 @@ import org.truffleruby.core.string.StringNodesFactory.StringEqualNodeGen;
 import org.truffleruby.core.string.StringNodesFactory.StringSubstringPrimitiveNodeFactory;
 import org.truffleruby.core.string.StringNodesFactory.SumNodeFactory;
 import org.truffleruby.core.string.StringSupport.TrTables;
-import org.truffleruby.core.support.Hypothesis;
 import org.truffleruby.core.support.RubyByteArray;
 import org.truffleruby.core.symbol.RubySymbol;
 import org.truffleruby.language.Nil;
@@ -5158,12 +5158,97 @@ public abstract class StringNodes {
 
     }
 
-    @Primitive(name = "string_splice", lowerFixnum = { 2, 3 })
     @ImportStatic(StringGuards.class)
-    public abstract static class StringSplicePrimitiveNode extends PrimitiveArrayArgumentsNode {
+    public abstract static class RopeReuseSlidingWindowNode extends RubyBaseNode {
+
+        protected static final int REUSE_BALANCE_HIGH = 10;
+
+        public enum Result {
+            INDETERMINATE,
+            HIGH_REUSE,
+            LOW_REUSE,
+        }
+
+        protected int ropeReuseBalance = 0;
+        protected WeakReference<Rope> prevOutputRope = new WeakReference<>(null);
+
+        public abstract Result execute(Rope inputRope, Rope outputRope);
+
+        @Specialization
+        protected Result profile(Rope inputRope, Rope outputRope,
+                @Cached BranchProfile ropeReuseProfile) {
+            if (prevOutputRope.get() == inputRope) {
+                ropeReuseProfile.enter();
+                int newBalance = ++ropeReuseBalance;
+                if (newBalance >= REUSE_BALANCE_HIGH) {
+                    return Result.HIGH_REUSE;
+                }
+            } else {
+                --ropeReuseBalance;
+            }
+
+            prevOutputRope = new WeakReference<>(outputRope);
+            return Result.INDETERMINATE;
+        }
+
+    }
+
+    @ImportStatic(StringGuards.class)
+    public abstract static class StringSpliceNode extends RubyBaseNode {
+
+        public static class RewriteException extends RuntimeException {
+            public static final long serialVersionUID = 1L;
+        }
+
+        public static StringSpliceNode create() {
+            return StringNodesFactory.StringSpliceNodeGen.create();
+        }
+
+        public abstract RubyString execute(RubyString string, Object other, int spliceByteIndex, int byteCountToReplace,
+                RubyEncoding rubyEncoding);
 
         @Specialization(
-                rewriteOn = Hypothesis.Rejected.class,
+                rewriteOn = RewriteException.class,
+                guards = {
+                        "libOther.isRubyString(other)",
+                        "!indexAtEitherBounds(string, spliceByteIndex)",
+                        "ropeByteLengthEquals(libOther.getRope(other), byteCountToReplace)",
+                        "encodingsCompatible(string.getRope().getEncoding(), libOther.getRope(other).getEncoding())" })
+        protected RubyString spliceExact(
+                RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
+                @Cached ConditionProfile insertStringIsEmptyProfile,
+                @Cached ConditionProfile splitRightIsEmptyProfile,
+                @Cached SubstringNode leftSubstringNode,
+                @Cached SubstringNode rightSubstringNode,
+                @Cached ConcatNode leftConcatNode,
+                @Cached ConcatNode rightConcatNode,
+                @Cached RopeReuseSlidingWindowNode rewriteTriggerNode,
+                @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
+
+            RubyString resultString = splice(
+                    string,
+                    other,
+                    spliceByteIndex,
+                    byteCountToReplace,
+                    rubyEncoding,
+                    insertStringIsEmptyProfile,
+                    splitRightIsEmptyProfile,
+                    leftSubstringNode,
+                    rightSubstringNode,
+                    leftConcatNode,
+                    rightConcatNode,
+                    libOther);
+
+            if (rewriteTriggerNode
+                    .execute(string.rope, resultString.rope) == RopeReuseSlidingWindowNode.Result.HIGH_REUSE) {
+                throw new RewriteException();
+            }
+
+            return resultString;
+        }
+
+        @Specialization(
+                replaces = "spliceExact",
                 guards = {
                         "libOther.isRubyString(other)",
                         "ropeByteLengthEquals(libOther.getRope(other), byteCountToReplace)",
@@ -5171,11 +5256,11 @@ public abstract class StringNodes {
         protected RubyString spliceExactReplace(
                 RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
                 @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
-                @Cached ConditionProfile sameCodeRangeProfile,
                 @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
 
             Rope rope = string.getRope();
             Rope otherRope = libOther.getRope(other);
+
             CodeRange outCodeRange = CodeRange.commonCodeRange(rope.getCodeRange(), otherRope.getCodeRange());
             LeafRope newRope = getMutableRopeNode.execute(rope, outCodeRange);
 
@@ -5186,7 +5271,7 @@ public abstract class StringNodes {
         }
 
         @Specialization(guards = { "libOther.isRubyString(other)", "indexAtStartBound(spliceByteIndex)" })
-        protected Object splicePrepend(
+        protected RubyString splicePrepend(
                 RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
                 @Cached SubstringNode prependSubstringNode,
                 @Cached ConcatNode prependConcatNode,
@@ -5203,7 +5288,7 @@ public abstract class StringNodes {
         }
 
         @Specialization(guards = { "libOther.isRubyString(other)", "indexAtEndBound(string, spliceByteIndex)" })
-        protected Object spliceAppend(
+        protected RubyString spliceAppend(
                 RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
                 @Cached ConcatNode appendConcatNode,
                 @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
@@ -5217,7 +5302,9 @@ public abstract class StringNodes {
             return string;
         }
 
-        @Specialization(guards = { "libOther.isRubyString(other)", "!indexAtEitherBounds(string, spliceByteIndex)" })
+        @Specialization(
+                replaces = { "spliceExact", "spliceExactReplace" },
+                guards = { "libOther.isRubyString(other)", "!indexAtEitherBounds(string, spliceByteIndex)" })
         protected RubyString splice(
                 RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
                 @Cached ConditionProfile insertStringIsEmptyProfile,
@@ -5229,6 +5316,7 @@ public abstract class StringNodes {
                 @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
             final Encoding encoding = rubyEncoding.jcoding;
             final Rope source = string.rope;
+
             final Rope insert = libOther.getRope(other);
             final int rightSideStartingIndex = spliceByteIndex + byteCountToReplace;
 
@@ -5283,6 +5371,23 @@ public abstract class StringNodes {
         protected boolean indexAtEitherBounds(RubyString string, int index) {
             return indexAtStartBound(index) || indexAtEndBound(string, index);
         }
+    }
+
+    @Primitive(name = "string_splice", lowerFixnum = { 2, 3 })
+    public abstract static class StringSplicePrimitiveNode extends PrimitiveArrayArgumentsNode {
+
+        @Child protected StringSpliceNode spliceNode = StringSpliceNode.create();
+
+        @Specialization
+        protected Object splice(
+                RubyString string,
+                Object other,
+                int spliceByteIndex,
+                int byteCountToReplace,
+                RubyEncoding rubyEncoding) {
+            return spliceNode.execute(string, other, spliceByteIndex, byteCountToReplace, rubyEncoding);
+        }
+
     }
 
     @Primitive(name = "string_to_inum", lowerFixnum = 1)
