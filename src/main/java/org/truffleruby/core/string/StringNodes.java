@@ -5158,8 +5158,12 @@ public abstract class StringNodes {
 
     }
 
+    /** This node injects runtime profiling into string operations. The profiling is based on a sliding window approach,
+     * whereby two values - the old value and the new value are passed in, and the node returns one of three values,
+     * indicating whether there is a lot of reuse happening, minimal reuse or indeterminate (which should be
+     * ignored). */
     @ImportStatic(StringGuards.class)
-    public abstract static class RopeReuseSlidingWindowNode extends RubyBaseNode {
+    public abstract static class RopeReuseMonitorNode extends RubyBaseNode {
 
         protected static final int REUSE_BALANCE_HIGH = 10;
 
@@ -5170,14 +5174,15 @@ public abstract class StringNodes {
         }
 
         protected int ropeReuseBalance = 0;
-        protected WeakReference<Rope> prevOutputRope = new WeakReference<>(null);
+        protected ThreadLocal<WeakReference<Rope>> prevOutputRope = ThreadLocal.withInitial(
+                () -> new WeakReference<>(null));
 
         public abstract Result execute(Rope inputRope, Rope outputRope);
 
         @Specialization
         protected Result profile(Rope inputRope, Rope outputRope,
                 @Cached BranchProfile ropeReuseProfile) {
-            if (prevOutputRope.get() == inputRope) {
+            if (prevOutputRope.get().get() == inputRope) {
                 ropeReuseProfile.enter();
                 int newBalance = ++ropeReuseBalance;
                 if (newBalance >= REUSE_BALANCE_HIGH) {
@@ -5187,7 +5192,7 @@ public abstract class StringNodes {
                 --ropeReuseBalance;
             }
 
-            prevOutputRope = new WeakReference<>(outputRope);
+            prevOutputRope.set(new WeakReference<>(outputRope));
             return Result.INDETERMINATE;
         }
 
@@ -5232,7 +5237,7 @@ public abstract class StringNodes {
                 @Cached SubstringNode rightSubstringNode,
                 @Cached ConcatNode leftConcatNode,
                 @Cached ConcatNode rightConcatNode,
-                @Cached RopeReuseSlidingWindowNode rewriteTriggerNode,
+                @Cached RopeReuseMonitorNode rewriteTriggerNode,
                 @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
 
             RubyString resultString = splice(
@@ -5250,7 +5255,7 @@ public abstract class StringNodes {
                     libOther);
 
             if (rewriteTriggerNode
-                    .execute(string.rope, resultString.rope) == RopeReuseSlidingWindowNode.Result.HIGH_REUSE) {
+                    .execute(string.rope, resultString.rope) == RopeReuseMonitorNode.Result.HIGH_REUSE) {
                 throw new RewriteException();
             }
 
