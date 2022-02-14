@@ -1978,22 +1978,26 @@ public abstract class RopeNodes {
             }
         }
 
-        @Specialization(guards = { "is7Bit(outCodeRange)" })
+        @Specialization(guards = { "is7Bit(outCodeRange)", "!isLeafNode(rope)" })
         protected LeafRope fromAsciiNonLeaf(Rope rope, CodeRange outCodeRange,
                 @Cached @Shared("bytesNode") BytesNode bytesNode) {
             return new AsciiOnlyLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding);
         }
 
-        @Specialization(guards = { "isValid(outCodeRange)" })
+        @Specialization(guards = { "isValid(outCodeRange)", "!isLeafNode(rope)" })
         protected LeafRope fromValidNonLeaf(Rope rope, CodeRange outCodeRange,
                 @Cached @Shared("bytesNode") BytesNode bytesNode) {
             return new ValidLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
         }
 
-        @Specialization(guards = { "isBroken(outCodeRange)" })
+        @Specialization(guards = { "isBroken(outCodeRange)", "!isLeafNode(rope)" })
         protected LeafRope fromInvalidNonLeaf(Rope rope, CodeRange outCodeRange,
                 @Cached @Shared("bytesNode") BytesNode bytesNode) {
             return new InvalidLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
+        }
+
+        protected static boolean isLeafNode(Rope rope) {
+            return rope instanceof LeafRope;
         }
 
         protected static boolean is7Bit(CodeRange codeRange) {
