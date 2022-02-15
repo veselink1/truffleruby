@@ -1369,6 +1369,35 @@ public abstract class RopeNodes {
         }
     }
 
+    /** Similarly to BytesNode, BytesCopyNode returns a byte[] representation of the string. In contrast to BytesNode,
+     * BytesCopyNode returns a newly-allocated byte[] each time. */
+    @GenerateUncached
+    public abstract static class BytesCopyNode extends RubyBaseNode {
+
+        public static BytesCopyNode create() {
+            return RopeNodesFactory.BytesCopyNodeGen.create();
+        }
+
+        public abstract byte[] execute(Rope rope);
+
+        @Specialization(guards = "rope.getRawBytes() != null")
+        protected byte[] getBytesManaged(ManagedRope rope) {
+            return rope.getRawBytes().clone();
+        }
+
+        @TruffleBoundary
+        @Specialization(guards = "rope.getRawBytes() == null")
+        protected byte[] getBytesManagedAndFlatten(ManagedRope rope) {
+            // getBytesSlow allocates a new byte[] buffer, so we don't need to clone() it.
+            return rope.getBytesSlow();
+        }
+
+        @Specialization
+        protected byte[] getBytesNative(NativeRope rope) {
+            return rope.getBytes().clone();
+        }
+    }
+
     @GenerateUncached
     public abstract static class ByteSlowNode extends RubyBaseNode {
 
@@ -1879,22 +1908,6 @@ public abstract class RopeNodes {
         protected ManagedRope fromOtherRope(ManagedRope rope) {
             return rope;
         }
-
-        protected static boolean is7Bit(CodeRange codeRange) {
-            return codeRange == CR_7BIT;
-        }
-
-        protected static boolean isValid(CodeRange codeRange) {
-            return codeRange == CR_VALID;
-        }
-
-        protected static boolean isBroken(CodeRange codeRange) {
-            return codeRange == CR_BROKEN;
-        }
-
-        protected static boolean isUnknown(CodeRange codeRange) {
-            return codeRange == CR_UNKNOWN;
-        }
     }
 
     public abstract static class GetMutableRopeNode extends RubyBaseNode {
@@ -1908,35 +1921,35 @@ public abstract class RopeNodes {
         @Specialization
         protected LeafRope fromAsciiLeaf(AsciiOnlyLeafRope rope, CodeRange outCodeRange,
                 @Cached @Shared("alreadyMutableProfile") ConditionProfile alreadyMutableProfile,
-                @Cached @Shared("bytesNode") BytesNode bytesNode) {
+                @Cached @Shared("bytesCopyNode") BytesCopyNode bytesCopyNode) {
             if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
                 return rope;
             } else {
-                return new AsciiOnlyLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding);
+                return new AsciiOnlyLeafRope(false, bytesCopyNode.execute(rope), rope.encoding);
             }
         }
 
         @Specialization
         protected LeafRope fromValidleaf(ValidLeafRope rope, CodeRange outCodeRange,
                 @Cached @Shared("alreadyMutableProfile") ConditionProfile alreadyMutableProfile,
-                @Cached @Shared("bytesNode") BytesNode bytesNode) {
+                @Cached @Shared("bytesCopyNode") BytesCopyNode bytesCopyNode) {
             if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
                 return rope;
             } else {
-                return new ValidLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
+                return new ValidLeafRope(false, bytesCopyNode.execute(rope), rope.encoding, rope.characterLength());
             }
         }
 
         @Specialization
         protected LeafRope fromInvalidLeaf(InvalidLeafRope rope, CodeRange outCodeRange,
                 @Cached @Shared("alreadyMutableProfile") ConditionProfile alreadyMutableProfile,
-                @Cached @Shared("bytesNode") BytesNode bytesNode) {
+                @Cached @Shared("bytesCopyNode") BytesCopyNode bytesCopyNode) {
             if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
                 return rope;
             } else {
                 return new InvalidLeafRope(
                         false,
-                        bytesNode.execute(rope).clone(),
+                        bytesCopyNode.execute(rope),
                         rope.encoding,
                         rope.characterLength());
             }
@@ -1944,20 +1957,20 @@ public abstract class RopeNodes {
 
         @Specialization(guards = { "is7Bit(outCodeRange)", "!isLeafNode(rope)" })
         protected LeafRope fromAsciiNonLeaf(Rope rope, CodeRange outCodeRange,
-                @Cached @Shared("bytesNode") BytesNode bytesNode) {
-            return new AsciiOnlyLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding);
+                @Cached @Shared("bytesCopyNode") BytesCopyNode bytesCopyNode) {
+            return new AsciiOnlyLeafRope(false, bytesCopyNode.execute(rope), rope.encoding);
         }
 
         @Specialization(guards = { "isValid(outCodeRange)", "!isLeafNode(rope)" })
         protected LeafRope fromValidNonLeaf(Rope rope, CodeRange outCodeRange,
-                @Cached @Shared("bytesNode") BytesNode bytesNode) {
-            return new ValidLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
+                @Cached @Shared("bytesCopyNode") BytesCopyNode bytesCopyNode) {
+            return new ValidLeafRope(false, bytesCopyNode.execute(rope), rope.encoding, rope.characterLength());
         }
 
         @Specialization(guards = { "isBroken(outCodeRange)", "!isLeafNode(rope)" })
         protected LeafRope fromInvalidNonLeaf(Rope rope, CodeRange outCodeRange,
-                @Cached @Shared("bytesNode") BytesNode bytesNode) {
-            return new InvalidLeafRope(false, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
+                @Cached @Shared("bytesCopyNode") BytesCopyNode bytesCopyNode) {
+            return new InvalidLeafRope(false, bytesCopyNode.execute(rope), rope.encoding, rope.characterLength());
         }
 
         protected static boolean isLeafNode(Rope rope) {
