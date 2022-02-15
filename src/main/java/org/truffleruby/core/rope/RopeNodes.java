@@ -1866,49 +1866,13 @@ public abstract class RopeNodes {
         public abstract ManagedRope execute(ManagedRope rope);
 
         @Specialization
-        protected ManagedRope fromAsciiLeaf(AsciiOnlyLeafRope rope,
-                @Cached @Shared("alreadyReadOnlyProfile") ConditionProfile alreadyReadOnlyProfile,
-                @Cached @Shared("bytesNode") BytesNode bytesNode) {
-            if (alreadyReadOnlyProfile.profile(rope.isReadOnly())) {
-                return rope;
-            } else {
-                //                System.err.printf("Allocating immutable leaf (L: %d) at %s%n", rope.byteLength(), getContext()
-                //                        .getCallStack()
-                //                        .getTopMostUserSourceSection(getEncapsulatingSourceSection()));
-                return new AsciiOnlyLeafRope(true, bytesNode.execute(rope).clone(), rope.encoding);
+        protected ManagedRope fromLeaf(LeafRope rope,
+                @Cached BranchProfile alreadyReadOnlyProfile) {
+            if (!rope.isReadOnly()) {
+                alreadyReadOnlyProfile.enter();
+                rope.makeReadOnly();
             }
-        }
-
-        @Specialization
-        protected ManagedRope fromValidleaf(ValidLeafRope rope,
-                @Cached @Shared("alreadyReadOnlyProfile") ConditionProfile alreadyReadOnlyProfile,
-                @Cached @Shared("bytesNode") BytesNode bytesNode) {
-            if (alreadyReadOnlyProfile.profile(rope.isReadOnly())) {
-                //                 System.err.printf("Allocating immutable leaf (L: %d) at %s%n", rope.byteLength(), getContext()
-                //                         .getCallStack()
-                //                         .getTopMostUserSourceSection(getEncapsulatingSourceSection()));
-                return new ValidLeafRope(true, bytesNode.execute(rope).clone(), rope.encoding, rope.characterLength());
-            } else {
-                return rope;
-            }
-        }
-
-        @Specialization
-        protected ManagedRope fromInvalidLeaf(InvalidLeafRope rope,
-                @Cached @Shared("alreadyReadOnlyProfile") ConditionProfile alreadyReadOnlyProfile,
-                @Cached @Shared("bytesNode") BytesNode bytesNode) {
-            if (alreadyReadOnlyProfile.profile(rope.isReadOnly())) {
-                return rope;
-            } else {
-                //                System.err.printf("Allocating immutable leaf (L: %d) at %s%n", rope.byteLength(), getContext()
-                //                        .getCallStack()
-                //                        .getTopMostUserSourceSection(getEncapsulatingSourceSection()));
-                return new InvalidLeafRope(
-                        true,
-                        bytesNode.execute(rope).clone(),
-                        rope.encoding,
-                        rope.characterLength());
-            }
+            return rope;
         }
 
         @Specialization
