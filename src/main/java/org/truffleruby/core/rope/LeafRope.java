@@ -54,6 +54,10 @@ public abstract class LeafRope extends ManagedRope {
             // nothing we can really do, except maybe abort.
             // TODO(veselink1): Think about warning the user that they might want to consider adding synchronization.
         }
-        System.arraycopy(srcBytes, 0, this.bytes, spliceByteIndex, srcBytes.length);
+        if (srcBytes.length == 1) {
+            bytes[spliceByteIndex] = srcBytes[0];
+        } else {
+            System.arraycopy(srcBytes, 0, this.bytes, spliceByteIndex, srcBytes.length);
+        }
     }
 }
