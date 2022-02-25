@@ -5204,115 +5204,8 @@ public abstract class StringNodes {
     @ImportStatic(StringGuards.class)
     public abstract static class StringSpliceNode extends RubyBaseNode {
 
-        public static class RewriteException extends RuntimeException {
-            public static final long serialVersionUID = 1L;
-        }
-
-        private static final double HIGH_ROPE_REUSE = 0.75;
-
-        public static StringSpliceNode create() {
-            return StringNodesFactory.StringSpliceNodeGen.create();
-        }
-
         public abstract RubyString execute(RubyString string, Object other, int spliceByteIndex, int byteCountToReplace,
                 RubyEncoding rubyEncoding);
-
-        /** <p>
-         * This implementation subsumes the mutable implementation until profiling shows that it would be beneficial,
-         * potentially indefinitely. The guards must match the guards of the mutable string implementation. This
-         * implementation defers to the tree-based implementations, while also profiling how frequently strings are
-         * being reused.
-         * </p>
-         * <p>
-         * When a certain threshold is reached, the node is re-specialized to use the mutable string implementation
-         * where possible.
-         * </p>
-        */
-        @Specialization(
-                rewriteOn = RewriteException.class,
-                guards = {
-                        "libOther.isRubyString(other)",
-                        "ropeByteLengthEquals(libOther.getRope(other), byteCountToReplace)",
-                        "encodingsCompatible(string.getRope().getEncoding(), libOther.getRope(other).getEncoding())" })
-        protected RubyString spliceExact(
-                RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
-                @Cached ConditionProfile insertStringIsEmptyProfile,
-                @Cached ConditionProfile splitRightIsEmptyProfile,
-                @Cached SubstringNode leftSubstringNode,
-                @Cached SubstringNode rightSubstringNode,
-                @Cached ConcatNode leftConcatNode,
-                @Cached ConcatNode rightConcatNode,
-                @Cached RopeReuseMonitorNode rewriteTriggerNode,
-                @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
-
-            Rope inputRope = string.rope;
-            RubyString resultString;
-
-            if (indexAtStartBound(spliceByteIndex)) {
-                resultString = splicePrepend(
-                        string,
-                        other,
-                        spliceByteIndex,
-                        byteCountToReplace,
-                        rubyEncoding,
-                        leftSubstringNode,
-                        leftConcatNode,
-                        libOther);
-            } else if (indexAtEndBound(string, spliceByteIndex)) {
-                resultString = spliceAppend(
-                        string,
-                        other,
-                        spliceByteIndex,
-                        byteCountToReplace,
-                        rubyEncoding,
-                        rightConcatNode,
-                        libOther);
-            } else {
-                resultString = splice(
-                        string,
-                        other,
-                        spliceByteIndex,
-                        byteCountToReplace,
-                        rubyEncoding,
-                        insertStringIsEmptyProfile,
-                        splitRightIsEmptyProfile,
-                        leftSubstringNode,
-                        rightSubstringNode,
-                        leftConcatNode,
-                        rightConcatNode,
-                        libOther);
-            }
-
-            if (rewriteTriggerNode.execute(inputRope, resultString.rope) >= HIGH_ROPE_REUSE) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                System.err.println("Rewriting...");
-                throw new RewriteException();
-            }
-
-            return resultString;
-        }
-
-        @Specialization(
-                guards = {
-                        "libOther.isRubyString(other)",
-                        "ropeByteLengthEquals(libOther.getRope(other), byteCountToReplace)",
-                        "encodingsCompatible(string.getRope().getEncoding(), libOther.getRope(other).getEncoding())" })
-        protected RubyString spliceExactReplace(
-                RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
-                @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
-                @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
-
-            Rope rope = string.getRope();
-            Rope otherRope = libOther.getRope(other);
-
-            CodeRange outCodeRange = CodeRange.commonCodeRange(rope.getCodeRange(), otherRope.getCodeRange());
-            LeafRope newRope = getMutableRopeNode.execute(rope, outCodeRange);
-
-            newRope.replaceRange(spliceByteIndex, otherRope.getBytes(), otherRope.getCodeRange());
-            string.setRope(newRope, rubyEncoding);
-
-            return string;
-        }
 
         @Specialization(guards = { "libOther.isRubyString(other)", "indexAtStartBound(spliceByteIndex)" })
         protected RubyString splicePrepend(
@@ -5419,21 +5312,72 @@ public abstract class StringNodes {
         }
     }
 
+
+    @ImportStatic(StringGuards.class)
+    public abstract static class MutableStringSpliceNode extends StringSpliceNode {
+
+        public abstract RubyString execute(RubyString string, Object other, int spliceByteIndex, int byteCountToReplace,
+                RubyEncoding rubyEncoding);
+
+        @Specialization(
+                insertBefore = "splicePrepend",
+                guards = {
+                        "libOther.isRubyString(other)",
+                        "ropeByteLengthEquals(libOther.getRope(other), byteCountToReplace)",
+                        "encodingsCompatible(string.getRope().getEncoding(), libOther.getRope(other).getEncoding())" })
+        protected RubyString spliceExactReplace(
+                RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
+                @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
+                @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
+
+            Rope rope = string.getRope();
+            Rope otherRope = libOther.getRope(other);
+
+            CodeRange outCodeRange = CodeRange.commonCodeRange(rope.getCodeRange(), otherRope.getCodeRange());
+            LeafRope newRope = getMutableRopeNode.execute(rope, outCodeRange);
+
+            newRope.replaceRange(spliceByteIndex, otherRope.getBytes(), otherRope.getCodeRange());
+            string.setRope(newRope, rubyEncoding);
+
+            return string;
+        }
+    }
+
     @Primitive(name = "string_splice", lowerFixnum = { 2, 3 })
     public abstract static class StringSplicePrimitiveNode extends PrimitiveArrayArgumentsNode {
 
-        @Child protected StringSpliceNode spliceNode = StringSpliceNode.create();
-
-        @Specialization
-        protected Object splice(
-                RubyString string,
-                Object other,
-                int spliceByteIndex,
-                int byteCountToReplace,
-                RubyEncoding rubyEncoding) {
-            return spliceNode.execute(string, other, spliceByteIndex, byteCountToReplace, rubyEncoding);
+        public static class RewriteException extends RuntimeException {
+            public static final long serialVersionUID = 1L;
         }
 
+        private static final double HIGH_ROPE_REUSE = 0.75;
+
+        @Specialization(rewriteOn = RewriteException.class)
+        protected RubyString splice(
+                RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
+                @Cached StringSpliceNode spliceNode,
+                @Cached RopeReuseMonitorNode rewriteTriggerNode) {
+
+            Rope inputRope = string.rope;
+            RubyString resultString = spliceNode
+                    .execute(string, other, spliceByteIndex, byteCountToReplace, rubyEncoding);
+
+            if (rewriteTriggerNode.execute(inputRope, resultString.rope) >= HIGH_ROPE_REUSE) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                System.err.println("Rewriting...");
+                throw new RewriteException();
+            }
+
+            return string;
+        }
+
+        @Specialization
+        protected RubyString spliceMutable(
+                RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
+                @Cached MutableStringSpliceNode spliceNode) {
+
+            return spliceNode.execute(string, other, spliceByteIndex, byteCountToReplace, rubyEncoding);
+        }
     }
 
     @Primitive(name = "string_to_inum", lowerFixnum = 1)
