@@ -1926,9 +1926,13 @@ public abstract class RopeNodes {
             return rope;
         }
 
-        @Specialization
+        @Specialization(guards = "!isLeafNode(rope)")
         protected ManagedRope fromOtherRope(ManagedRope rope) {
             return rope;
+        }
+
+        protected static boolean isLeafNode(Rope rope) {
+            return rope instanceof LeafRope;
         }
     }
 
