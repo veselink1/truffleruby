@@ -152,10 +152,12 @@ import org.truffleruby.core.rope.RopeNodes.CodeRangeNode;
 import org.truffleruby.core.rope.RopeNodes.CompareRopesNode;
 import org.truffleruby.core.rope.RopeNodes.ConcatNode;
 import org.truffleruby.core.rope.RopeNodes.FlattenNode;
+import org.truffleruby.core.rope.RopeNodes.IsBytesMutableNode;
 import org.truffleruby.core.rope.RopeNodes.GetByteNode;
 import org.truffleruby.core.rope.RopeNodes.GetBytesObjectNode;
 import org.truffleruby.core.rope.RopeNodes.GetCodePointNode;
 import org.truffleruby.core.rope.RopeNodes.MakeLeafRopeNode;
+import org.truffleruby.core.rope.RopeNodes.MakeMutableLeafRopeNode;
 import org.truffleruby.core.rope.RopeNodes.RepeatNode;
 import org.truffleruby.core.rope.RopeNodes.SingleByteOptimizableNode;
 import org.truffleruby.core.rope.RopeNodes.SubstringNode;
@@ -3132,14 +3134,20 @@ public abstract class StringNodes {
             this.upperToLower = upperToLower;
         }
 
-        public abstract byte[] executeInvert(byte[] bytes, int start);
+        public abstract byte[] executeInvert(byte[] bytes, int start, boolean inplace);
 
         @Specialization
-        protected byte[] invert(byte[] bytes, int start,
+        protected byte[] invert(byte[] bytes, int start, boolean inplace,
                 @Cached BranchProfile foundLowerCaseCharProfile,
                 @Cached BranchProfile foundUpperCaseCharProfile,
+                @Cached ConditionProfile inplaceProfile,
                 @Cached LoopConditionProfile loopProfile) {
-            byte[] modified = null;
+            byte[] modified;
+            if (inplaceProfile.profile(inplace)) {
+                modified = bytes;
+            } else {
+                modified = null;
+            }
 
             int i = start;
             try {
@@ -3149,7 +3157,7 @@ public abstract class StringNodes {
                     if (lowerToUpper && StringSupport.isAsciiLowercase(b)) {
                         foundLowerCaseCharProfile.enter();
 
-                        if (modified == null) {
+                        if (!inplaceProfile.profile(inplace) && modified == null) {
                             modified = bytes.clone();
                         }
 
@@ -3160,7 +3168,7 @@ public abstract class StringNodes {
                     if (upperToLower && StringSupport.isAsciiUppercase(b)) {
                         foundUpperCaseCharProfile.enter();
 
-                        if (modified == null) {
+                        if (!inplaceProfile.profile(inplace) && modified == null) {
                             modified = bytes.clone();
                         }
 
@@ -3201,22 +3209,31 @@ public abstract class StringNodes {
 
         public abstract Object executeInvert(RubyString string);
 
-        @Specialization
+        @Specialization(guards = { "isBytesMutableNode.execute(string.rope)" })
+        protected Object invertMutable(RubyString string,
+                @Cached IsBytesMutableNode isBytesMutableNode,
+                @Cached BytesNode bytesNode) {
+            invertNode.executeInvert(string.rope.getRawBytes(), 0, true);
+            return string;
+        }
+
+        @Specialization(guards = { "!isBytesMutableNode.execute(string.rope)" })
         protected Object invert(RubyString string,
+                @Cached IsBytesMutableNode isBytesMutableNode,
                 @Cached BytesNode bytesNode,
                 @Cached CharacterLengthNode characterLengthNode,
                 @Cached CodeRangeNode codeRangeNode,
-                @Cached MakeLeafRopeNode makeLeafRopeNode,
+                @Cached MakeMutableLeafRopeNode makeLeafRopeNode,
                 @Cached ConditionProfile noopProfile) {
             final Rope rope = string.rope;
 
             final byte[] bytes = bytesNode.execute(rope);
-            byte[] modified = invertNode.executeInvert(bytes, 0);
+            byte[] modified = invertNode.executeInvert(bytes, 0, false);
 
             if (noopProfile.profile(modified == null)) {
                 return nil;
             } else {
-                final Rope newRope = makeLeafRopeNode.executeMake(
+                final LeafRope newRope = makeLeafRopeNode.executeMake(
                         modified,
                         rope.getEncoding(),
                         codeRangeNode.execute(rope),
@@ -3242,6 +3259,7 @@ public abstract class StringNodes {
             return invertAsciiCaseNode.executeInvert(string);
         }
 
+        // TODO(veselink1): Optimize for mutable strings
         @Specialization(guards = { "isSimpleAsciiCaseMapping(string, caseMappingOptions, singleByteOptimizableNode)" })
         protected Object upcaseMultiByteAsciiSimple(RubyString string, int caseMappingOptions,
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
@@ -3272,6 +3290,7 @@ public abstract class StringNodes {
             }
         }
 
+        // TODO(veselink1): Optimize for mutable strings
         @Specialization(guards = { "isComplexCaseMapping(string, caseMappingOptions, singleByteOptimizableNode)" })
         protected Object upcaseMultiByteComplex(RubyString string, int caseMappingOptions,
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
@@ -3331,8 +3350,10 @@ public abstract class StringNodes {
 
         @Specialization(guards = "isSingleByteCaseMapping(string, caseMappingOptions, singleByteOptimizableNode)")
         protected Object capitalizeSingleByte(RubyString string, int caseMappingOptions,
+                @Cached IsBytesMutableNode isBytesMutableNode,
                 @Cached("createUpperToLower()") InvertAsciiCaseBytesNode invertAsciiCaseNode,
                 @Cached @Shared("emptyStringProfile") ConditionProfile emptyStringProfile,
+                @Cached ConditionProfile mutableStringProfile,
                 @Cached @Exclusive ConditionProfile firstCharIsLowerProfile,
                 @Cached @Exclusive ConditionProfile otherCharsAlreadyLowerProfile,
                 @Cached @Exclusive ConditionProfile mustCapitalizeFirstCharProfile) {
@@ -3345,7 +3366,8 @@ public abstract class StringNodes {
             final byte[] sourceBytes = bytesNode.execute(rope);
             final byte[] finalBytes;
 
-            final byte[] processedBytes = invertAsciiCaseNode.executeInvert(sourceBytes, 1);
+            final boolean isSourceMutable = isBytesMutableNode.execute(rope);
+            final byte[] processedBytes = invertAsciiCaseNode.executeInvert(sourceBytes, 1, isSourceMutable);
 
             if (otherCharsAlreadyLowerProfile.profile(processedBytes == null)) {
                 // Bytes 1..N are either not letters or already lowercased. Time to check the first byte.
@@ -3367,16 +3389,19 @@ public abstract class StringNodes {
                 finalBytes[0] ^= 0x20;
             }
 
-            string.setRope(
-                    makeLeafRopeNode.executeMake(
-                            finalBytes,
-                            rope.getEncoding(),
-                            codeRangeNode.execute(rope),
-                            characterLengthNode.execute(rope)));
+            if (!isSourceMutable) {
+                string.setRope(
+                        makeLeafRopeNode.executeMake(
+                                finalBytes,
+                                rope.getEncoding(),
+                                codeRangeNode.execute(rope),
+                                characterLengthNode.execute(rope)));
+            }
 
             return string;
         }
 
+        // TODO(veselink1): Optimize for mutable strings
         @Specialization(guards = "isSimpleAsciiCaseMapping(string, caseMappingOptions, singleByteOptimizableNode)")
         protected Object capitalizeMultiByteAsciiSimple(RubyString string, int caseMappingOptions,
                 @Cached @Shared("dummyEncodingProfile") BranchProfile dummyEncodingProfile,
@@ -3415,6 +3440,7 @@ public abstract class StringNodes {
             return nil;
         }
 
+        // TODO(veselink1): Optimize for mutable strings
         @Specialization(guards = "isComplexCaseMapping(string, caseMappingOptions, singleByteOptimizableNode)")
         protected Object capitalizeMultiByteComplex(RubyString string, int caseMappingOptions,
                 @Cached @Shared("dummyEncodingProfile") BranchProfile dummyEncodingProfile,
