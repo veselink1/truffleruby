@@ -203,10 +203,10 @@ public abstract class RopeNodes {
 
         @Specialization(guards = "base.isAsciiOnly()")
         protected Rope makeSubstring7Bit(Encoding encoding, ManagedRope base, int byteOffset, int byteLength,
-                @Cached GetSharedRopeNode getSharedNode) {
+                @Cached GetReadOnlyRopeNode getReadOnlyNode) {
             return new SubstringRope(
                     encoding,
-                    getSharedNode.execute(base),
+                    getReadOnlyNode.execute(base),
                     byteOffset,
                     byteLength,
                     byteLength,
@@ -216,7 +216,7 @@ public abstract class RopeNodes {
         @Specialization(guards = "!base.isAsciiOnly()")
         protected Rope makeSubstringNon7Bit(Encoding encoding, ManagedRope base, int byteOffset, int byteLength,
                 @Cached GetBytesObjectNode getBytesObject,
-                @Cached GetSharedRopeNode getSharedRopeNode,
+                @Cached GetReadOnlyRopeNode getReadOnlyRopeNode,
                 @Cached CalculateAttributesNode calculateAttributes) {
 
             final StringAttributes attributes = calculateAttributes
@@ -227,7 +227,7 @@ public abstract class RopeNodes {
 
             return new SubstringRope(
                     encoding,
-                    getSharedRopeNode.execute(base),
+                    getReadOnlyRopeNode.execute(base),
                     byteOffset,
                     byteLength,
                     characterLength,
@@ -453,8 +453,8 @@ public abstract class RopeNodes {
         protected Rope concat(ManagedRope left, ManagedRope right, Encoding encoding,
                 @Cached ConditionProfile sameCodeRangeProfile,
                 @Cached ConditionProfile brokenCodeRangeProfile,
-                @Cached GetSharedRopeNode getSharedNodeLeft,
-                @Cached GetSharedRopeNode getSharedNodeRight) {
+                @Cached GetReadOnlyRopeNode getReadOnlyNodeLeft,
+                @Cached GetReadOnlyRopeNode getReadOnlyNodeRight) {
             try {
                 Math.addExact(left.byteLength(), right.byteLength());
             } catch (ArithmeticException e) {
@@ -464,8 +464,8 @@ public abstract class RopeNodes {
             }
 
             return new ConcatRope(
-                    getSharedNodeLeft.execute(left),
-                    getSharedNodeRight.execute(right),
+                    getReadOnlyNodeLeft.execute(left),
+                    getReadOnlyNodeRight.execute(right),
                     encoding,
                     commonCodeRange(
                             left.getCodeRange(),
@@ -539,19 +539,24 @@ public abstract class RopeNodes {
             return RopeNodesFactory.MakeLeafRopeNodeGen.create();
         }
 
+        /** Whether to return a {@link LeafRope} that is in the read-only state or not. */
+        protected boolean isMakeReadOnly() {
+            return true;
+        }
+
         public abstract LeafRope executeMake(byte[] bytes, Encoding encoding, CodeRange codeRange,
                 Object characterLength);
 
         @Specialization(guards = "is7Bit(codeRange)")
         protected LeafRope makeAsciiOnlyLeafRope(
                 byte[] bytes, Encoding encoding, CodeRange codeRange, Object characterLength) {
-            return new AsciiOnlyLeafRope(bytes, encoding);
+            return new AsciiOnlyLeafRope(isMakeReadOnly(), bytes, encoding);
         }
 
         @Specialization(guards = "isValid(codeRange)")
         protected LeafRope makeValidLeafRopeWithCharacterLength(
                 byte[] bytes, Encoding encoding, CodeRange codeRange, int characterLength) {
-            return new ValidLeafRope(bytes, encoding, characterLength);
+            return new ValidLeafRope(isMakeReadOnly(), bytes, encoding, characterLength);
         }
 
         @Specialization(guards = { "isValid(codeRange)", "isFixedWidth(encoding)" })
@@ -559,7 +564,7 @@ public abstract class RopeNodes {
                 byte[] bytes, Encoding encoding, CodeRange codeRange, NotProvided characterLength) {
             final int calculatedCharacterLength = bytes.length / encoding.minLength();
 
-            return new ValidLeafRope(bytes, encoding, calculatedCharacterLength);
+            return new ValidLeafRope(isMakeReadOnly(), bytes, encoding, calculatedCharacterLength);
         }
 
         @Specialization(guards = { "isValid(codeRange)", "!isFixedWidth(encoding)", "isAsciiCompatible(encoding)" })
@@ -597,7 +602,7 @@ public abstract class RopeNodes {
                 calculatedCharacterLength++;
             }
 
-            return new ValidLeafRope(bytes, encoding, calculatedCharacterLength);
+            return new ValidLeafRope(isMakeReadOnly(), bytes, encoding, calculatedCharacterLength);
         }
 
         @Specialization(guards = { "isValid(codeRange)", "!isFixedWidth(encoding)", "!isAsciiCompatible(encoding)" })
@@ -613,13 +618,17 @@ public abstract class RopeNodes {
                 p += StringSupport.characterLength(encoding, codeRange, bytes, p, e);
             }
 
-            return new ValidLeafRope(bytes, encoding, calculatedCharacterLength);
+            return new ValidLeafRope(isMakeReadOnly(), bytes, encoding, calculatedCharacterLength);
         }
 
         @Specialization(guards = "isBroken(codeRange)")
         protected LeafRope makeInvalidLeafRope(
                 byte[] bytes, Encoding encoding, CodeRange codeRange, Object characterLength) {
-            return new InvalidLeafRope(bytes, encoding, RopeOperations.strLength(encoding, bytes, 0, bytes.length));
+            return new InvalidLeafRope(
+                    isMakeReadOnly(),
+                    bytes,
+                    encoding,
+                    RopeOperations.strLength(encoding, bytes, 0, bytes.length));
         }
 
         @Specialization(guards = { "isUnknown(codeRange)", "isEmpty(bytes)" })
@@ -642,10 +651,10 @@ public abstract class RopeNodes {
             }
 
             if (isAsciiCompatible.profile(encoding.isAsciiCompatible())) {
-                return new AsciiOnlyLeafRope(RopeConstants.EMPTY_BYTES, encoding);
+                return new AsciiOnlyLeafRope(isMakeReadOnly(), RopeConstants.EMPTY_BYTES, encoding);
             }
 
-            return new ValidLeafRope(RopeConstants.EMPTY_BYTES, encoding, 0);
+            return new ValidLeafRope(isMakeReadOnly(), RopeConstants.EMPTY_BYTES, encoding, 0);
         }
 
         @Specialization(guards = { "isUnknown(codeRange)", "!isEmpty(bytes)" })
@@ -662,17 +671,17 @@ public abstract class RopeNodes {
             switch (attributes.getCodeRange()) {
                 case CR_7BIT: {
                     asciiOnlyProfile.enter();
-                    return new AsciiOnlyLeafRope(bytes, encoding);
+                    return new AsciiOnlyLeafRope(isMakeReadOnly(), bytes, encoding);
                 }
 
                 case CR_VALID: {
                     validProfile.enter();
-                    return new ValidLeafRope(bytes, encoding, attributes.getCharacterLength());
+                    return new ValidLeafRope(isMakeReadOnly(), bytes, encoding, attributes.getCharacterLength());
                 }
 
                 case CR_BROKEN: {
                     brokenProfile.enter();
-                    return new InvalidLeafRope(bytes, encoding, attributes.getCharacterLength());
+                    return new InvalidLeafRope(isMakeReadOnly(), bytes, encoding, attributes.getCharacterLength());
                 }
 
                 default: {
@@ -703,6 +712,19 @@ public abstract class RopeNodes {
             return encoding.isFixedWidth();
         }
 
+    }
+
+    @GenerateUncached
+    public abstract static class MakeMutableLeafRopeNode extends MakeLeafRopeNode {
+
+        public static MakeMutableLeafRopeNode create() {
+            return RopeNodesFactory.MakeMutableLeafRopeNodeGen.create();
+        }
+
+        @Override
+        protected boolean isMakeReadOnly() {
+            return false;
+        }
     }
 
     @ImportStatic(RopeGuards.class)
@@ -739,7 +761,7 @@ public abstract class RopeNodes {
 
         @Specialization(guards = { "!isSingleByteString(base)", "times > 1" })
         protected Rope repeatManaged(ManagedRope base, int times,
-                @Cached GetSharedRopeNode getSharedNode) {
+                @Cached GetReadOnlyRopeNode getReadOnlyNode) {
             int byteLength;
             try {
                 byteLength = Math.multiplyExact(base.byteLength(), times);
@@ -751,7 +773,7 @@ public abstract class RopeNodes {
                                 this));
             }
 
-            return new RepeatingRope(getSharedNode.execute(base), times, byteLength);
+            return new RepeatingRope(getReadOnlyNode.execute(base), times, byteLength);
         }
 
         @Specialization(guards = { "!isSingleByteString(base)", "times > 1" })
@@ -1887,9 +1909,9 @@ public abstract class RopeNodes {
     }
 
     @GenerateUncached
-    public abstract static class GetSharedRopeNode extends RubyBaseNode {
-        public static GetSharedRopeNode create() {
-            return RopeNodesFactory.GetSharedRopeNodeGen.create();
+    public abstract static class GetReadOnlyRopeNode extends RubyBaseNode {
+        public static GetReadOnlyRopeNode create() {
+            return RopeNodesFactory.GetReadOnlyRopeNodeGen.create();
         }
 
         public abstract ManagedRope execute(ManagedRope rope);

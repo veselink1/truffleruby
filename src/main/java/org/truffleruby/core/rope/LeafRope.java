@@ -11,7 +11,7 @@ package org.truffleruby.core.rope;
 
 import org.jcodings.Encoding;
 
-public abstract class LeafRope extends ManagedRope {
+public abstract class LeafRope extends ManagedRope implements MutableRope {
 
     // isReadOnly is set at construction time.
     private final boolean isReadOnly;
