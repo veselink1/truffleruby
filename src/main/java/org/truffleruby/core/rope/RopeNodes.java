@@ -1357,12 +1357,16 @@ public abstract class RopeNodes {
         protected boolean canBeCached(Rope a, Rope b) {
             if (getContext().isPreInitializing()) {
                 final String home = getLanguage().getRubyHome();
-                return !RopeOperations.anyChildContains(a, home) && !RopeOperations.anyChildContains(b, home);
+                return !RopeOperations.anyChildContains(a, home) && !RopeOperations.anyChildContains(b, home) &&
+                        !isMutable(a) && !isMutable(b);
             } else {
-                return true;
+                return !isMutable(a) && !isMutable(b);
             }
         }
 
+        protected boolean isMutable(Rope a) {
+            return a instanceof MutableRope && !((MutableRope) a).isReadOnly();
+        }
     }
 
     @GenerateUncached
@@ -1905,6 +1909,29 @@ public abstract class RopeNodes {
 
         protected static boolean isSubstringRope(ManagedRope rope) {
             return rope instanceof SubstringRope;
+        }
+    }
+
+    @GenerateUncached
+    public abstract static class IsBytesMutableNode extends RubyBaseNode {
+        public static IsBytesMutableNode create() {
+            return RopeNodesFactory.IsBytesMutableNodeGen.create();
+        }
+
+        public abstract boolean execute(Rope rope);
+
+        @Specialization
+        protected boolean fromLeaf(LeafRope rope) {
+            return !rope.isReadOnly();
+        }
+
+        @Specialization(guards = "!isLeafNode(rope)")
+        protected boolean fromOtherRope(Rope rope) {
+            return false;
+        }
+
+        protected static boolean isLeafNode(Rope rope) {
+            return rope instanceof LeafRope;
         }
     }
 
