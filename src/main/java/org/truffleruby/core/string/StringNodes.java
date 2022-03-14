@@ -5419,8 +5419,20 @@ public abstract class StringNodes {
     }
 
     @Primitive(name = "string_splice", lowerFixnum = { 2, 3 })
-    @ImportStatic(StringProfilingNodes.RopeOptimizationHint.class)
     public abstract static class StringSplicePrimitiveNode extends PrimitiveArrayArgumentsNode {
+
+        @Specialization
+        protected RubyString splice(
+                RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
+                @Cached StringSpliceNode spliceNode) {
+
+            return spliceNode.execute(string, other, spliceByteIndex, byteCountToReplace, rubyEncoding);
+        }
+    }
+
+    @Primitive(name = "string_splice_with_hint", lowerFixnum = { 2, 3 })
+    @ImportStatic(StringProfilingNodes.RopeOptimizationHint.class)
+    public abstract static class StringSpliceWithHintPrimitiveNode extends PrimitiveArrayArgumentsNode {
 
         // Default to mutable implementation
         @Specialization(guards = { "hint != IMMUTABLE" })

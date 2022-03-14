@@ -1023,7 +1023,7 @@ class String
     replacement = StringValue replacement
     enc = Primitive.encoding_ensure_compatible self, replacement
 
-    Primitive.string_splice(self, replacement, bi, bs, enc, hint)
+    Primitive.string_splice_with_hint(self, replacement, bi, bs, enc, hint)
   end
 
   def assign_string(index, replacement)
