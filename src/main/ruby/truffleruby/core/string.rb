@@ -992,39 +992,7 @@ class String
     self
   end
 
-  def []=(index, count_or_replacement, replacement=undefined)
-    Primitive.check_frozen self
-
-    if Primitive.undefined?(replacement)
-      replacement = count_or_replacement
-      count = nil
-    else
-      count = count_or_replacement
-    end
-
-    case index
-    when Integer
-      assign_index(index, count, replacement)
-    when String
-      assign_string(index, replacement)
-    when Range
-      assign_range(index, replacement)
-    when Regexp
-      assign_regexp(index, count, replacement)
-    else
-      index = Primitive.rb_to_int index
-
-      if count
-        return self[index, count] = replacement
-      else
-        return self[index] = replacement
-      end
-    end
-
-    replacement
-  end
-
-  def assign_index(index, count, replacement)
+  def assign_index(index, count, replacement, hint)
     index += size if index < 0
 
     if index < 0 or index > size
@@ -1055,7 +1023,7 @@ class String
     replacement = StringValue replacement
     enc = Primitive.encoding_ensure_compatible self, replacement
 
-    Primitive.string_splice(self, replacement, bi, bs, enc)
+    Primitive.string_splice(self, replacement, bi, bs, enc, hint)
   end
 
   def assign_string(index, replacement)

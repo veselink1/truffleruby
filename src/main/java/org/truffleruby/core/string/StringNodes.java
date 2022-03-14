@@ -73,15 +73,23 @@ import static org.truffleruby.core.string.StringSupport.MBCLEN_INVALID_P;
 import static org.truffleruby.core.string.StringSupport.MBCLEN_NEEDMORE_P;
 
 import java.io.UnsupportedEncodingException;
-import java.lang.ref.WeakReference;
 import java.nio.charset.StandardCharsets;
 
+import com.oracle.truffle.api.CompilerDirectives;
+import com.oracle.truffle.api.RootCallTarget;
 import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.dsl.Bind;
+import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.dsl.ImportStatic;
+import com.oracle.truffle.api.dsl.Cached;
 import com.oracle.truffle.api.dsl.Cached.Exclusive;
 import com.oracle.truffle.api.dsl.Cached.Shared;
+import com.oracle.truffle.api.dsl.NodeChild;
+import com.oracle.truffle.api.dsl.CreateCast;
+import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.dsl.ReportPolymorphism;
+import com.oracle.truffle.api.dsl.GenerateUncached;
 import com.oracle.truffle.api.nodes.Node;
-import com.oracle.truffle.api.nodes.NodeCost;
 import com.oracle.truffle.api.profiles.LoopConditionProfile;
 import org.graalvm.collections.Pair;
 import org.jcodings.Config;
@@ -104,10 +112,11 @@ import org.truffleruby.core.CoreLibrary;
 import org.truffleruby.core.array.ArrayUtils;
 import org.truffleruby.core.array.RubyArray;
 import org.truffleruby.core.cast.BooleanCastNode;
-import org.truffleruby.core.cast.ToIntNode;
 import org.truffleruby.core.cast.ToLongNode;
 import org.truffleruby.core.cast.ToRopeNodeGen;
 import org.truffleruby.core.cast.ToStrNode;
+import org.truffleruby.core.cast.ToIntNode;
+import org.truffleruby.core.cast.ToRubyIntegerNode;
 import org.truffleruby.core.cast.ToStrNodeGen;
 import org.truffleruby.core.encoding.IsCharacterHeadNode;
 import org.truffleruby.core.encoding.EncodingNodes.CheckEncodingNode;
@@ -129,6 +138,7 @@ import org.truffleruby.core.proc.RubyProc;
 import org.truffleruby.core.range.RubyIntRange;
 import org.truffleruby.core.range.RubyLongRange;
 import org.truffleruby.core.range.RubyObjectRange;
+import org.truffleruby.core.range.RubyRange;
 import org.truffleruby.core.regexp.RubyRegexp;
 import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
@@ -184,6 +194,8 @@ import org.truffleruby.core.string.StringNodesFactory.StringEqualNodeGen;
 import org.truffleruby.core.string.StringNodesFactory.StringSubstringPrimitiveNodeFactory;
 import org.truffleruby.core.string.StringNodesFactory.SumNodeFactory;
 import org.truffleruby.core.string.StringSupport.TrTables;
+import org.truffleruby.core.string.StringProfilingNodes.ProfileRopeMutationNode;
+import org.truffleruby.core.string.StringProfilingNodes.RopeOptimizationHint;
 import org.truffleruby.core.support.RubyByteArray;
 import org.truffleruby.core.symbol.RubySymbol;
 import org.truffleruby.language.Nil;
@@ -198,6 +210,7 @@ import org.truffleruby.language.control.DeferredRaiseException;
 import org.truffleruby.language.control.RaiseException;
 import org.truffleruby.language.dispatch.DispatchNode;
 import org.truffleruby.language.library.RubyStringLibrary;
+import org.truffleruby.language.methods.Split;
 import org.truffleruby.language.objects.AllocationTracing;
 import org.truffleruby.language.objects.LogicalClassNode;
 import org.truffleruby.language.objects.WriteObjectFieldNode;
@@ -205,17 +218,8 @@ import org.truffleruby.language.threadlocal.SpecialVariableStorage;
 import org.truffleruby.language.yield.CallBlockNode;
 import org.truffleruby.utils.Utils;
 
-import com.oracle.truffle.api.CompilerDirectives;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.RootCallTarget;
-import com.oracle.truffle.api.dsl.Cached;
-import com.oracle.truffle.api.dsl.CreateCast;
-import com.oracle.truffle.api.dsl.Fallback;
-import com.oracle.truffle.api.dsl.GenerateUncached;
-import com.oracle.truffle.api.dsl.ImportStatic;
-import com.oracle.truffle.api.dsl.NodeChild;
-import com.oracle.truffle.api.dsl.ReportPolymorphism;
-import com.oracle.truffle.api.dsl.Specialization;
+import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.DirectCallNode;
@@ -5185,46 +5189,91 @@ public abstract class StringNodes {
 
     }
 
-    /** This node injects runtime profiling into string operations. The profiling is based on a sliding window approach,
-     * whereby two values - the old value and the new value are passed in, and the node returns one of three values,
-     * indicating whether there is a lot of reuse happening, minimal reuse or indeterminate (which should be
-     * ignored). */
-    @ImportStatic(StringGuards.class)
-    public abstract static class RopeReuseMonitorNode extends RubyBaseNode {
+    @CoreMethod(
+            names = { "[]=" },
+            split = Split.ALWAYS,
+            required = 2,
+            optional = 1,
+            lowerFixnum = { 1, 2 },
+            argumentNames = { "index", "count_or_replacement", "replacement" },
+            raiseIfFrozenSelf = true)
+    public abstract static class ElementAssignmentNode extends CoreMethodArrayArgumentsNode {
 
-        // Some large limit that we could never overflow due to race conditions or by our arithmetic.
-        private static final int MAX_VALUE = 0x0fffffff;
+        @CompilationFinal private RopeOptimizationHint ropeOptimizationHint = RopeOptimizationHint.UNDEFINED;
 
-        protected int ropeReuseCount = 1000;
-        protected int ropeNoReuseCount = 1000;
-        protected ThreadLocal<WeakReference<Rope>> prevOutputRope = ThreadLocal.withInitial(
-                () -> new WeakReference<>(null));
-
-        @Override
-        public NodeCost getCost() {
-            // We return a cost of 0, since we don't want our profiling to influence any decisions of the
-            // underlying implementation in regard to optimization.
-            return NodeCost.NONE;
-        }
-
-        public abstract double execute(Rope inputRope, Rope outputRope);
+        public abstract RubyString execute(RubyString string, Object index, Object countOrReplacement,
+                Object replacement);
 
         @Specialization
-        protected double profile(Rope inputRope, Rope outputRope) {
-
-            boolean isReused = prevOutputRope.get().get() == inputRope;
-            prevOutputRope.set(new WeakReference<>(outputRope));
-            if (isReused) {
-                if (ropeReuseCount < MAX_VALUE) {
-                    ++ropeReuseCount;
-                }
-            } else if (ropeNoReuseCount < MAX_VALUE) {
-                ++ropeNoReuseCount;
-            }
-
-            return (double) ropeReuseCount / (ropeReuseCount + ropeNoReuseCount);
+        protected RubyString assignIndex(RubyString string, int index, Object replacement, NotProvided notProvided,
+                @Shared("profileRopeNode") @Cached("createEphemeral()") ProfileRopeMutationNode profileRopeNode,
+                @Cached DispatchNode callNode) {
+            final Rope inputRope = string.rope;
+            final RubyString outputString = (RubyString) callNode
+                    .call(string, "assign_index", index, nil, replacement, ropeOptimizationHint);
+            final Rope outputRope = outputString.rope;
+            ropeOptimizationHint = profileRopeNode.execute(inputRope, outputRope);
+            return outputString;
         }
 
+        @Specialization(guards = { "wasProvided(replacement)" })
+        protected RubyString assignIndex(RubyString string, int index, int count, Object replacement,
+                @Cached DispatchNode callNode) {
+            return (RubyString) callNode
+                    .call(string, "assign_index", index, count, replacement, RopeOptimizationHint.UNDEFINED);
+        }
+
+        @Specialization
+        protected RubyString assignString(
+                RubyString string, RubyString match, Object replacement, NotProvided notProvided,
+                @Cached DispatchNode callNode) {
+            return (RubyString) callNode.call(string, "assign_string", match, replacement);
+        }
+
+        @Specialization
+        protected RubyString assignRange(
+                RubyString string, RubyRange range, Object replacement, NotProvided notProvided,
+                @Cached DispatchNode callNode) {
+            return (RubyString) callNode.call(string, "assign_range", range, replacement);
+        }
+
+        @Specialization
+        protected RubyString assignRegex(
+                RubyString string, RubyRegexp regex, Object replacement, NotProvided notProvided,
+                @Cached DispatchNode callNode) {
+            return (RubyString) callNode.call(string, "assign_regex", regex, nil, replacement);
+        }
+
+        @Specialization(guards = { "wasProvided(replacement)" })
+        protected RubyString assignRegex(RubyString string, RubyRegexp regex, int count, Object replacement,
+                @Cached DispatchNode callNode) {
+            return (RubyString) callNode.call(string, "assign_regex", regex, count, replacement);
+        }
+
+        @Specialization
+        protected RubyString assignConvert(RubyString string, Object index, Object replacement, NotProvided notProvided,
+                @Cached ToRubyIntegerNode toRubyIntegerNode,
+                @Shared("profileRopeNode") @Cached("createEphemeral()") ProfileRopeMutationNode profileRopeNode,
+                @Cached DispatchNode callNode) {
+            return assignIndex(
+                    string,
+                    (int) toRubyIntegerNode.execute(index),
+                    replacement,
+                    notProvided,
+                    profileRopeNode,
+                    callNode);
+        }
+
+        @Specialization(guards = { "wasProvided(replacement)" })
+        protected RubyString assignConvertWithCount(RubyString string, Object index, int count, Object replacement,
+                @Cached ToRubyIntegerNode toRubyIntegerNode,
+                @Cached DispatchNode callNode) {
+            return assignIndex(string, (int) toRubyIntegerNode.execute(index), count, replacement, callNode);
+        }
+
+        protected Object get(Object[] array, int index) {
+            return array[index];
+        }
     }
 
     @ImportStatic(StringGuards.class)
@@ -5370,37 +5419,32 @@ public abstract class StringNodes {
     }
 
     @Primitive(name = "string_splice", lowerFixnum = { 2, 3 })
+    @ImportStatic(StringProfilingNodes.RopeOptimizationHint.class)
     public abstract static class StringSplicePrimitiveNode extends PrimitiveArrayArgumentsNode {
 
-        public static class RewriteException extends RuntimeException {
-            public static final long serialVersionUID = 1L;
-        }
-
-        private static final double HIGH_ROPE_REUSE = 0.75;
-
-        @Specialization(rewriteOn = RewriteException.class)
-        protected RubyString splice(
-                RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
-                @Cached StringSpliceNode spliceNode,
-                @Cached RopeReuseMonitorNode rewriteTriggerNode) {
-
-            Rope inputRope = string.rope;
-            RubyString resultString = spliceNode
-                    .execute(string, other, spliceByteIndex, byteCountToReplace, rubyEncoding);
-
-            if (rewriteTriggerNode.execute(inputRope, resultString.rope) >= HIGH_ROPE_REUSE) {
-                CompilerDirectives.transferToInterpreterAndInvalidate();
-                System.err.println("Rewriting...");
-                throw new RewriteException();
-            }
-
-            return string;
-        }
-
-        @Specialization
+        // Default to mutable implementation
+        @Specialization(guards = { "hint != IMMUTABLE" })
         protected RubyString spliceMutable(
-                RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
+                RubyString string,
+                Object other,
+                int spliceByteIndex,
+                int byteCountToReplace,
+                RubyEncoding rubyEncoding,
+                StringProfilingNodes.RopeOptimizationHint hint,
                 @Cached MutableStringSpliceNode spliceNode) {
+
+            return spliceNode.execute(string, other, spliceByteIndex, byteCountToReplace, rubyEncoding);
+        }
+
+        @Specialization(guards = { "hint == IMMUTABLE" })
+        protected RubyString splice(
+                RubyString string,
+                Object other,
+                int spliceByteIndex,
+                int byteCountToReplace,
+                RubyEncoding rubyEncoding,
+                StringProfilingNodes.RopeOptimizationHint hint,
+                @Cached StringSpliceNode spliceNode) {
 
             return spliceNode.execute(string, other, spliceByteIndex, byteCountToReplace, rubyEncoding);
         }
