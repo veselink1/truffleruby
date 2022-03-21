@@ -24,7 +24,7 @@ public class RopeGuards {
         return rope instanceof LeafRope;
     }
 
-    public static boolean isEmpty(byte[] bytes) {
+    public static boolean isEmpty(Bytes bytes) {
         return bytes.length == 0;
     }
 

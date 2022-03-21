@@ -9,26 +9,26 @@
  */
 package org.truffleruby.collections;
 
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.RopeConstants;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 
 public class ByteArrayBuilder {
 
-    private static final byte[] EMPTY_BYTES = RopeConstants.EMPTY_BYTES;
+    private static final Bytes EMPTY_BYTES = RopeConstants.EMPTY_BYTES;
 
-    private byte[] bytes = EMPTY_BYTES;
+    private Bytes bytes = EMPTY_BYTES;
     private int length;
 
     public ByteArrayBuilder() {
     }
 
     public ByteArrayBuilder(int size) {
-        bytes = new byte[size];
+        bytes = new Bytes(size);
     }
 
-    public static ByteArrayBuilder createUnsafeBuilder(byte[] wrap) {
+    public static ByteArrayBuilder createUnsafeBuilder(Bytes wrap) {
         final ByteArrayBuilder builder = new ByteArrayBuilder();
         builder.unsafeReplace(wrap, wrap.length);
         return builder;
@@ -44,14 +44,14 @@ public class ByteArrayBuilder {
 
     public void append(byte b) {
         ensureSpace(1);
-        bytes[length] = b;
+        bytes.set(length, b);
         length++;
     }
 
     public void append(byte b, int count) {
         if (count > 0) {
             ensureSpace(count);
-            Arrays.fill(bytes, length, length + count, b);
+            Bytes.fill(bytes, length, length + count, b);
             length += count;
         }
     }
@@ -60,37 +60,49 @@ public class ByteArrayBuilder {
         append((byte) b, count);
     }
 
+    public void append(Bytes appendBytes) {
+        append(appendBytes, 0, appendBytes.length);
+    }
+
     public void append(byte[] appendBytes) {
         append(appendBytes, 0, appendBytes.length);
     }
 
+    public void append(Bytes appendBytes, int appendStart, int appendLength) {
+        append(appendBytes.array, appendBytes.offset + appendStart, appendLength);
+    }
+
     public void append(byte[] appendBytes, int appendStart, int appendLength) {
         ensureSpace(appendLength);
-        System.arraycopy(appendBytes, appendStart, bytes, length, appendLength);
+        System.arraycopy(appendBytes, appendStart, bytes.array, bytes.offset + length, appendLength);
         length += appendLength;
     }
 
-    public void unsafeReplace(byte[] bytes, int size) {
+    public void unsafeReplace(Bytes bytes, int size) {
         this.bytes = bytes;
         this.length = size;
     }
 
     private void ensureSpace(int space) {
         if (length + space > bytes.length) {
-            bytes = Arrays.copyOf(bytes, (bytes.length + space) * 2);
+            bytes = Bytes.copyOf(bytes, (bytes.length + space) * 2);
         }
     }
 
     public byte get(int n) {
-        return bytes[n];
+        return bytes.get(n);
     }
 
     public void set(int n, int b) {
-        bytes[n] = (byte) b;
+        bytes.set(n, (byte) b);
     }
 
-    public byte[] getBytes() {
-        return Arrays.copyOf(bytes, length);
+    public Bytes getBytes() {
+        return Bytes.copyOf(bytes, length);
+    }
+
+    public byte[] getBytesArray() {
+        return getBytes().array;
     }
 
     public void clear() {
@@ -100,11 +112,11 @@ public class ByteArrayBuilder {
 
     @Override
     public String toString() {
-        return new String(bytes, 0, length, StandardCharsets.ISO_8859_1);
+        return new String(bytes.array, bytes.offset, length, StandardCharsets.ISO_8859_1);
     }
 
     // TODO CS 14-Feb-17 review all uses of this method
-    public byte[] getUnsafeBytes() {
+    public Bytes getUnsafeBytes() {
         return bytes;
     }
 

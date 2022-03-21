@@ -559,7 +559,7 @@ public class CExtNodes {
                 @Cached ConditionProfile sameEncodingProfile,
                 @Cached BranchProfile errorProfile) {
             final Rope rope = strings.getRope(string);
-            final byte[] bytes = bytesNode.execute(rope);
+            final Bytes bytes = bytesNode.execute(rope);
             final CodeRange ropeCodeRange = codeRangeNode.execute(rope);
             final Encoding enc = encoding.jcoding;
 
@@ -570,7 +570,7 @@ public class CExtNodes {
                 cr = CodeRange.CR_UNKNOWN;
             }
 
-            final int r = calculateCharacterLengthNode.characterLength(enc, cr, new Bytes(bytes));
+            final int r = calculateCharacterLengthNode.characterLength(enc, cr, bytes);
 
             if (!StringSupport.MBCLEN_CHARFOUND_P(r)) {
                 errorProfile.enter();
@@ -1028,11 +1028,11 @@ public class CExtNodes {
                 @CachedLibrary(limit = "2") RubyStringLibrary strings,
                 @Cached RopeNodes.BytesNode getBytes) {
             final Rope rope = strings.getRope(string);
-            final byte[] bytes = getBytes.execute(rope);
+            final Bytes bytes = getBytes.execute(rope);
             final int byteLength = rope.byteLength();
             int i = 0;
             for (; i < byteLength; i++) {
-                if (bytes[i] == 0) {
+                if (bytes.get(i) == 0) {
                     return i;
                 }
             }
@@ -1216,14 +1216,14 @@ public class CExtNodes {
 
                 if (libString.isRubyString(object)) {
                     final Rope rope = libString.getRope(object);
-                    final byte[] bytes = rope.getBytes();
+                    final Bytes bytes = rope.getBytes();
                     final StringBuilder builder = new StringBuilder();
 
                     for (int i = 0; i < bytes.length; i++) {
                         if (i % 4 == 0 && i != 0 && i != bytes.length - 1) {
                             builder.append(" ");
                         }
-                        builder.append(String.format("%02x", bytes[i]));
+                        builder.append(String.format("%02x", bytes.get(i)));
                     }
 
                     representation = RopeOperations.decodeRope(rope) + " (" + builder.toString() + ")";
@@ -1311,12 +1311,12 @@ public class CExtNodes {
                 @CachedLibrary("write_p") InteropLibrary receivers,
                 @Cached RopeNodes.BytesNode getBytes,
                 @Cached TranslateInteropExceptionNode translateInteropExceptionNode) {
-            final byte[] bytes = getBytes.execute(strings.getRope(string));
+            final Bytes bytes = getBytes.execute(strings.getRope(string));
             final byte[] to = new byte[bytes.length];
             final IntHolder intHolder = new IntHolder();
-            intHolder.value = 0;
+            intHolder.value = bytes.offset;
             final int resultLength = enc.jcoding
-                    .mbcCaseFold(flags, bytes, intHolder, bytes.length, to);
+                    .mbcCaseFold(flags, bytes.array, intHolder, bytes.offset + bytes.length, to);
             InteropNodes.execute(write_p, new Object[]{ p, intHolder.value }, receivers, translateInteropExceptionNode);
             final byte[] result = new byte[resultLength];
             if (resultLength > 0) {
@@ -1407,11 +1407,12 @@ public class CExtNodes {
         @Specialization(guards = "strings.isRubyString(string)")
         protected Object rbEncLeftCharHead(RubyEncoding enc, Object string, int start, int p, int end,
                 @CachedLibrary(limit = "2") RubyStringLibrary strings) {
+            final Bytes bytes = strings.getRope(string).getBytes();
             return enc.jcoding.leftAdjustCharHead(
-                    strings.getRope(string).getBytes(),
-                    start,
-                    p,
-                    end);
+                    bytes.array,
+                    bytes.offset + start,
+                    bytes.offset + p,
+                    bytes.offset + end);
         }
 
     }

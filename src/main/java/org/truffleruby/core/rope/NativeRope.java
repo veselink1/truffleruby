@@ -29,7 +29,7 @@ public class NativeRope extends Rope {
 
     public NativeRope(
             RubyContext context,
-            byte[] bytes,
+            Bytes bytes,
             Encoding encoding,
             int characterLength,
             CodeRange codeRange) {
@@ -45,10 +45,10 @@ public class NativeRope extends Rope {
         this.pointer = pointer;
     }
 
-    private static Pointer allocateNativePointer(RubyContext context, byte[] bytes) {
+    private static Pointer allocateNativePointer(RubyContext context, Bytes bytes) {
         final Pointer pointer = Pointer.malloc(bytes.length + 1);
         pointer.enableAutorelease(context);
-        pointer.writeBytes(0, bytes, 0, bytes.length);
+        pointer.writeBytes(0, bytes.array, bytes.offset, bytes.length);
         pointer.writeByte(bytes.length, (byte) 0);
         return pointer;
     }
@@ -95,7 +95,7 @@ public class NativeRope extends Rope {
     }
 
     /** Creates a new native rope which preserves existing bytes and byte length up to newCapacity
-     * 
+     *
      * @param context the Ruby context
      * @param newCapacity the size in bytes minus one of the new pointer length
      * @return the new NativeRope */
@@ -114,9 +114,9 @@ public class NativeRope extends Rope {
     }
 
     @Override
-    public byte[] getBytes() {
+    public Bytes getBytes() {
         // Always re-read bytes from the native pointer as they might have changed.
-        final byte[] bytes = new byte[byteLength()];
+        final Bytes bytes = new Bytes(byteLength());
         copyTo(0, bytes, 0, byteLength());
         return bytes;
     }
@@ -163,15 +163,15 @@ public class NativeRope extends Rope {
         this.codeRange = attributes.getCodeRange();
     }
 
-    public byte[] getBytes(int byteOffset, int byteLength) {
-        final byte[] bytes = new byte[byteLength];
+    public Bytes getBytes(int byteOffset, int byteLength) {
+        final Bytes bytes = new Bytes(byteLength);
         copyTo(byteOffset, bytes, 0, byteLength);
         return bytes;
     }
 
     @TruffleBoundary
-    public void copyTo(int byteOffset, byte[] dest, int bufferPos, int byteLength) {
-        pointer.readBytes(byteOffset, dest, bufferPos, byteLength);
+    public void copyTo(int byteOffset, Bytes dest, int bufferPos, int byteLength) {
+        pointer.readBytes(byteOffset, dest.array, dest.offset + bufferPos, byteLength);
     }
 
     @Override

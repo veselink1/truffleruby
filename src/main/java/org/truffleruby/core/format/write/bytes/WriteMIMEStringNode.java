@@ -78,7 +78,7 @@ public abstract class WriteMIMEStringNode extends FormatNode {
     @Specialization
     protected Object write(VirtualFrame frame, Rope rope,
             @Cached RopeNodes.BytesNode bytesNode) {
-        return write(frame, bytesNode.execute(rope));
+        return write(frame, bytesNode.execute(rope).toArray());
     }
 
     @TruffleBoundary
@@ -87,7 +87,7 @@ public abstract class WriteMIMEStringNode extends FormatNode {
 
         final ByteArrayBuilder output = new ByteArrayBuilder();
         qpencode(output, bytes, length);
-        return output.getBytes();
+        return output.getBytes().toArray();
     }
 
     private static final byte[] hex_table = RopeOperations.encodeAsciiBytes("0123456789ABCDEF");

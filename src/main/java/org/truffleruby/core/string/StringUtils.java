@@ -11,6 +11,7 @@ package org.truffleruby.core.string;
 
 import java.util.Locale;
 
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.RopeOperations;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
@@ -34,8 +35,8 @@ public abstract class StringUtils {
         return String.format(format, args);
     }
 
-    public static byte[] formatASCIIBytes(String format, Object... args) {
-        return RopeOperations.encodeAsciiBytes(format(format, args));
+    public static Bytes formatASCIIBytes(String format, Object... args) {
+        return new Bytes(RopeOperations.encodeAsciiBytes(format(format, args)));
     }
 
     @TruffleBoundary

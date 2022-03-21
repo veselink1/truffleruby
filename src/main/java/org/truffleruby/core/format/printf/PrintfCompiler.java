@@ -15,6 +15,7 @@ import com.oracle.truffle.api.nodes.Node;
 import org.truffleruby.RubyLanguage;
 import org.truffleruby.core.format.FormatEncoding;
 import org.truffleruby.core.format.FormatRootNode;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.Rope;
 
 import com.oracle.truffle.api.RootCallTarget;
@@ -41,11 +42,11 @@ public class PrintfCompiler {
                 builder.getNode()).getCallTarget();
     }
 
-    private static char[] bytesToChars(byte[] bytes) {
+    private static char[] bytesToChars(Bytes bytes) {
         final char[] chars = new char[bytes.length];
 
         for (int n = 0; n < bytes.length; n++) {
-            chars[n] = (char) bytes[n];
+            chars[n] = (char) bytes.get(n);
         }
 
         return chars;

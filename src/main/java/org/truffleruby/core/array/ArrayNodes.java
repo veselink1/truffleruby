@@ -62,6 +62,7 @@ import org.truffleruby.core.numeric.FixnumLowerNode;
 import org.truffleruby.core.proc.RubyProc;
 import org.truffleruby.core.range.RangeNodes.NormalizedStartLengthNode;
 import org.truffleruby.core.range.RubyRange;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeNodes;
 import org.truffleruby.core.rope.RopeOperations;
@@ -1591,7 +1592,7 @@ public abstract class ArrayNodes {
             final RubyEncoding rubyEncoding = result.getEncoding().getEncodingForLength(formatLength);
             final RubyString string = makeStringNode.fromRope(
                     makeLeafRopeNode.executeMake(
-                            bytes,
+                            new Bytes(bytes),
                             rubyEncoding.jcoding,
                             result.getStringCodeRange(),
                             result.getStringLength()),

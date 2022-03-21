@@ -46,7 +46,7 @@ public abstract class WriteBase64StringNode extends FormatNode {
     @Specialization
     protected Object write(VirtualFrame frame, Rope rope,
             @Cached RopeNodes.BytesNode bytesNode) {
-        return write(frame, bytesNode.execute(rope));
+        return write(frame, bytesNode.execute(rope).toArray());
     }
 
     @TruffleBoundary
@@ -55,7 +55,7 @@ public abstract class WriteBase64StringNode extends FormatNode {
 
         final ByteArrayBuilder output = new ByteArrayBuilder();
         EncodeUM.encodeUM(null, bytes, length, ignoreStar, 'm', output);
-        return output.getBytes();
+        return output.getBytesArray();
     }
 
 }

@@ -35,6 +35,7 @@ import org.jcodings.Encoding;
 import org.jcodings.ascii.AsciiTables;
 import org.jcodings.specific.ASCIIEncoding;
 import org.truffleruby.RubyContext;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.RopeOperations;
 import org.truffleruby.language.control.RaiseException;
@@ -56,17 +57,17 @@ public class EncodingUtils {
         return enc.isDummy();
     }
 
-    public static boolean DECORATOR_P(byte[] sname, byte[] dname) {
-        return sname == null || sname.length == 0 || sname[0] == 0;
+    public static boolean DECORATOR_P(Bytes sname, Bytes dname) {
+        return sname == null || sname.length == 0 || sname.get(0) == 0;
     }
 
-    public static List<String> encodingNames(byte[] name, int p, int end) {
+    public static List<String> encodingNames(Bytes name, int p, int end) {
         final List<String> names = new ArrayList<>();
 
         Encoding enc = ASCIIEncoding.INSTANCE;
         int s = p;
 
-        int code = name[s] & 0xff;
+        int code = name.get(s) & 0xff;
         if (enc.isDigit(code)) {
             return names;
         }
@@ -75,8 +76,8 @@ public class EncodingUtils {
         boolean hasLower = false;
         if (enc.isUpper(code)) {
             hasUpper = true;
-            while (++s < end && (enc.isAlnum(name[s] & 0xff) || name[s] == (byte) '_')) {
-                if (enc.isLower(name[s] & 0xff)) {
+            while (++s < end && (enc.isAlnum(name.get(s) & 0xff) || name.get(s) == (byte) '_')) {
+                if (enc.isLower(name.get(s) & 0xff)) {
                     hasLower = true;
                 }
             }
@@ -91,7 +92,7 @@ public class EncodingUtils {
         if (!isValid || hasLower) {
             if (!hasLower || !hasUpper) {
                 do {
-                    code = name[s] & 0xff;
+                    code = name.get(s) & 0xff;
                     if (enc.isLower(code)) {
                         hasLower = true;
                     }
@@ -101,18 +102,18 @@ public class EncodingUtils {
                 } while (++s < end && (!hasLower || !hasUpper));
             }
 
-            byte[] constName = new byte[end - p];
-            System.arraycopy(name, p, constName, 0, end - p);
+            Bytes constName = new Bytes(end - p);
+            Bytes.copy(name, p, constName, 0, end - p);
             s = 0;
-            code = constName[s] & 0xff;
+            code = constName.get(s) & 0xff;
 
             if (!isValid) {
                 if (enc.isLower(code)) {
-                    constName[s] = AsciiTables.ToUpperCaseTable[code];
+                    constName.set(s, AsciiTables.ToUpperCaseTable[code]);
                 }
                 for (; s < constName.length; ++s) {
-                    if (!enc.isAlnum(constName[s] & 0xff)) {
-                        constName[s] = (byte) '_';
+                    if (!enc.isAlnum(constName.get(s) & 0xff)) {
+                        constName.set(s, (byte) '_');
                     }
                 }
                 if (hasUpper) {
@@ -121,9 +122,9 @@ public class EncodingUtils {
             }
             if (hasLower) {
                 for (s = 0; s < constName.length; ++s) {
-                    code = constName[s] & 0xff;
+                    code = constName.get(s) & 0xff;
                     if (enc.isLower(code)) {
-                        constName[s] = AsciiTables.ToUpperCaseTable[code];
+                        constName.set(s, AsciiTables.ToUpperCaseTable[code]);
                     }
                 }
                 names.add(RopeOperations.decodeAscii(constName));
@@ -135,7 +136,7 @@ public class EncodingUtils {
 
 
     // rb_enc_ascget
-    public static int encAscget(byte[] pBytes, int p, int e, int[] len, Encoding enc, CodeRange codeRange) {
+    public static int encAscget(Bytes pBytes, int p, int e, int[] len, Encoding enc, CodeRange codeRange) {
         int c;
         int l;
 
@@ -144,7 +145,7 @@ public class EncodingUtils {
         }
 
         if (encAsciicompat(enc)) {
-            c = pBytes[p] & 0xFF;
+            c = pBytes.get(p) & 0xFF;
             if (!Encoding.isAscii((byte) c)) {
                 return -1;
             }
@@ -157,7 +158,7 @@ public class EncodingUtils {
         if (!StringSupport.MBCLEN_CHARFOUND_P(l)) {
             return -1;
         }
-        c = enc.mbcToCode(pBytes, p, e);
+        c = enc.mbcToCode(pBytes.array, pBytes.offset + p, pBytes.offset + e);
         if (!Encoding.isAscii(c)) {
             return -1;
         }
@@ -169,7 +170,7 @@ public class EncodingUtils {
 
     // rb_enc_codepoint_len
     @TruffleBoundary
-    public static int encCodepointLength(byte[] pBytes, int p, int e, int[] len_p, Encoding enc, CodeRange codeRange,
+    public static int encCodepointLength(Bytes pBytes, int p, int e, int[] len_p, Encoding enc, CodeRange codeRange,
             Node node) {
         int r;
         if (e <= p) {
@@ -190,8 +191,8 @@ public class EncodingUtils {
     }
 
     // rb_enc_mbcput
-    public static int encMbcput(int c, byte[] buf, int p, Encoding enc) {
-        return enc.codeToMbc(c, buf, p);
+    public static int encMbcput(int c, Bytes buf, int p, Encoding enc) {
+        return enc.codeToMbc(c, buf.array, buf.offset + p);
     }
 
 }

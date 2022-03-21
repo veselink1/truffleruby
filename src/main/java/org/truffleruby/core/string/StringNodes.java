@@ -243,10 +243,10 @@ public abstract class StringNodes {
          * call, otherwise the rope built from the builder will end up in an inconsistent state. */
         public RubyString fromBuilderUnsafe(RopeBuilder builder, RubyEncoding encoding, CodeRange codeRange) {
             assert builder.getEncoding() == encoding.jcoding;
-            final byte[] unsafeBytes = builder.getUnsafeBytes();
-            final byte[] ropeBytes;
+            final Bytes unsafeBytes = builder.getUnsafeBytes();
+            final Bytes ropeBytes;
 
-            // While the caller must guarantee the builder's byte[] cannot change after this call, it's possible
+            // While the caller must guarantee the builder's Bytes cannot change after this call, it's possible
             // the builder has allocated more space than it needs. Ropes require that the backing byte array
             // is the exact length required. If the builder doesn't satisfy this constraint, we must make a copy.
             // Alternatively, we could make a leaf rope and then take a substring of it, but that would complicate
@@ -283,7 +283,13 @@ public abstract class StringNodes {
 
         @Specialization
         protected RubyString makeStringFromBytes(byte[] bytes, RubyEncoding encoding, CodeRange codeRange,
-                @Cached MakeLeafRopeNode makeLeafRopeNode) {
+                @Shared("makeLeafRopeNode") @Cached MakeLeafRopeNode makeLeafRopeNode) {
+            return makeStringFromBytesObject(new Bytes(bytes), encoding, codeRange, makeLeafRopeNode);
+        }
+
+        @Specialization
+        protected RubyString makeStringFromBytesObject(Bytes bytes, RubyEncoding encoding, CodeRange codeRange,
+                @Shared("makeLeafRopeNode") @Cached MakeLeafRopeNode makeLeafRopeNode) {
             final LeafRope rope = makeLeafRopeNode
                     .executeMake(bytes, encoding.jcoding, codeRange, NotProvided.INSTANCE);
             final RubyString string = new RubyString(
@@ -298,14 +304,14 @@ public abstract class StringNodes {
 
         @Specialization(guards = "is7Bit(codeRange)")
         protected RubyString makeAsciiStringFromString(String string, RubyEncoding encoding, CodeRange codeRange) {
-            final byte[] bytes = RopeOperations.encodeAsciiBytes(string);
+            final Bytes bytes = new Bytes(RopeOperations.encodeAsciiBytes(string));
 
             return executeMake(bytes, encoding, codeRange);
         }
 
         @Specialization(guards = "!is7Bit(codeRange)")
         protected RubyString makeStringFromString(String string, RubyEncoding encoding, CodeRange codeRange) {
-            final byte[] bytes = StringOperations.encodeBytes(string, encoding.jcoding);
+            final Bytes bytes = StringOperations.encodeBytes(string, encoding.jcoding);
 
             return executeMake(bytes, encoding, codeRange);
         }
@@ -635,7 +641,7 @@ public abstract class StringNodes {
         @Specialization
         protected Object getIndex(Object string, int index, NotProvided length,
                 @CachedLibrary(limit = "2") RubyStringLibrary strings) {
-            return index == charLength(strings.getRope(string)) // Check for the only difference from str[index, 1]
+            return index == charLength(strings.getRope(string)) // Check for the only difference from str.get(index, 1)
                     ? outOfBoundsNil()
                     : substring(string, index, 1);
         }
@@ -880,12 +886,12 @@ public abstract class StringNodes {
         protected RubyArray bytes(Object string, Nil block,
                 @CachedLibrary(limit = "2") RubyStringLibrary strings) {
             final Rope rope = strings.getRope(string);
-            final byte[] bytes = bytesNode.execute(rope);
+            final Bytes bytes = bytesNode.execute(rope);
 
             final int[] store = new int[bytes.length];
 
             for (int n = 0; n < store.length; n++) {
-                store[n] = bytes[n] & 0xFF;
+                store[n] = bytes.get(n) & 0xFF;
             }
 
             return createArray(store);
@@ -895,10 +901,10 @@ public abstract class StringNodes {
         protected Object bytes(Object string, RubyProc block,
                 @CachedLibrary(limit = "2") RubyStringLibrary strings) {
             Rope rope = strings.getRope(string);
-            byte[] bytes = bytesNode.execute(rope);
+            Bytes bytes = bytesNode.execute(rope);
 
             for (int i = 0; i < bytes.length; i++) {
-                callBlock(block, bytes[i] & 0xff);
+                callBlock(block, bytes.get(i) & 0xff);
             }
 
             return string;
@@ -1003,8 +1009,8 @@ public abstract class StringNodes {
             if (suffixByteLength == 0) {
                 return true;
             }
-            final byte[] stringBytes = stringBytesNode.execute(stringRope);
-            final byte[] suffixBytes = suffixBytesNode.execute(suffixRope);
+            final Bytes stringBytes = stringBytesNode.execute(stringRope);
+            final Bytes suffixBytes = suffixBytesNode.execute(suffixRope);
 
             final int offset = stringByteLength - suffixByteLength;
 
@@ -1015,12 +1021,16 @@ public abstract class StringNodes {
             return ArrayUtils.regionEquals(stringBytes, offset, suffixBytes, 0, suffixByteLength);
         }
 
-        private boolean isCharacterHead(RubyEncoding enc, int stringByteLength, byte[] stringBytes, int offset) {
+        private boolean isCharacterHead(RubyEncoding enc, int stringByteLength, Bytes stringBytes, int offset) {
             if (isCharacterHeadNode == null) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
                 isCharacterHeadNode = insert(IsCharacterHeadNode.create());
             }
-            return isCharacterHeadNode.execute(enc, stringBytes, offset, stringByteLength);
+            return isCharacterHeadNode.execute(
+                    enc,
+                    stringBytes.array,
+                    stringBytes.offset + offset,
+                    stringBytes.offset + stringByteLength);
         }
 
     }
@@ -1347,8 +1357,8 @@ public abstract class StringNodes {
             }
 
             final CodeRange cr = codeRangeNode.execute(rope);
-            final byte[] inputBytes = bytesNode.execute(rope);
-            final byte[] outputBytes = StringSupport.downcaseMultiByteAsciiSimple(encoding, cr, inputBytes);
+            final Bytes inputBytes = bytesNode.execute(rope);
+            final Bytes outputBytes = StringSupport.downcaseMultiByteAsciiSimple(encoding, cr, inputBytes);
 
             if (modifiedProfile.profile(inputBytes != outputBytes)) {
                 string.setRope(
@@ -1403,10 +1413,10 @@ public abstract class StringNodes {
                 @Cached BytesNode updatedBytesNode,
                 @Cached ConditionProfile ropeChangedProfile) {
             Rope rope = strings.getRope(string);
-            byte[] bytes = bytesNode.execute(rope);
+            Bytes bytes = bytesNode.execute(rope);
 
             for (int i = 0; i < bytes.length; i++) {
-                callBlock(block, bytes[i] & 0xff);
+                callBlock(block, bytes.get(i) & 0xff);
 
                 Rope updatedRope = strings.getRope(string);
                 if (ropeChangedProfile.profile(rope != updatedRope)) {
@@ -1435,7 +1445,7 @@ public abstract class StringNodes {
                 @Cached LogicalClassNode logicalClassNode) {
             final Rope rope = strings.getRope(string);
             final RubyEncoding encoding = strings.getEncoding(string);
-            final byte[] ptrBytes = bytesNode.execute(rope);
+            final Bytes ptrBytes = bytesNode.execute(rope);
             final int len = ptrBytes.length;
             final Encoding enc = rope.getEncoding();
             final CodeRange cr = codeRangeNode.execute(rope);
@@ -1444,7 +1454,7 @@ public abstract class StringNodes {
 
             for (int i = 0; i < len; i += n) {
                 n = calculateCharacterLengthNode
-                        .characterLengthWithRecovery(enc, cr, Bytes.fromRange(ptrBytes, i, len));
+                        .characterLengthWithRecovery(enc, cr, ptrBytes.sliceRange(i, len));
                 callBlock(block, substr(rope, encoding, i, n, logicalClassNode.execute(string)));
             }
 
@@ -1754,17 +1764,17 @@ public abstract class StringNodes {
             final int firstCodePoint = getCodePointNode.executeGetCodePoint(string.encoding, rope, 0);
 
             // Check the first code point to see if it's a space. In the case of strings without leading spaces,
-            // this check can avoid having to materialize the entire byte[] (a potentially expensive operation
+            // this check can avoid having to materialize the entire Bytes (a potentially expensive operation
             // for ropes) and can avoid having to compile the while loop.
             if (noopProfile.profile(!StringSupport.isAsciiSpace(firstCodePoint))) {
                 return nil;
             }
 
             final int end = rope.byteLength();
-            final byte[] bytes = bytesNode.execute(rope);
+            final Bytes bytes = bytesNode.execute(rope);
 
             int p = 0;
-            while (p < end && StringSupport.isAsciiSpace(bytes[p])) {
+            while (p < end && StringSupport.isAsciiSpace(bytes.get(p))) {
                 p++;
             }
 
@@ -1881,7 +1891,7 @@ public abstract class StringNodes {
                     .executeGetCodePoint(string.encoding, rope, rope.byteLength() - 1);
 
             // Check the last code point to see if it's a space or NULL. In the case of strings without leading spaces,
-            // this check can avoid having to materialize the entire byte[] (a potentially expensive operation
+            // this check can avoid having to materialize the entire Bytes (a potentially expensive operation
             // for ropes) and can avoid having to compile the while loop.
             final boolean willStrip = lastCodePoint == 0x00 || StringSupport.isAsciiSpace(lastCodePoint);
             if (noopProfile.profile(!willStrip)) {
@@ -1889,10 +1899,10 @@ public abstract class StringNodes {
             }
 
             final int end = rope.byteLength();
-            final byte[] bytes = bytesNode.execute(rope);
+            final Bytes bytes = bytesNode.execute(rope);
 
             int endp = end - 1;
-            while (endp >= 0 && (bytes[endp] == 0 || StringSupport.isAsciiSpace(bytes[endp]))) {
+            while (endp >= 0 && (bytes.get(endp) == 0 || StringSupport.isAsciiSpace(bytes.get(endp)))) {
                 endp--;
             }
 
@@ -1919,7 +1929,7 @@ public abstract class StringNodes {
                         coreExceptions().encodingCompatibilityErrorIncompatibleWithOperation(enc.jcoding, this));
             }
 
-            final byte[] bytes = rope.getBytes();
+            final Bytes bytes = rope.getBytes();
             final int start = 0;
             final int end = rope.byteLength();
 
@@ -1942,8 +1952,8 @@ public abstract class StringNodes {
         }
 
         @TruffleBoundary
-        private int prevCharHead(Encoding enc, byte[] bytes, int p, int s, int end) {
-            return enc.prevCharHead(bytes, p, s, end);
+        private int prevCharHead(Encoding enc, Bytes bytes, int p, int s, int end) {
+            return enc.prevCharHead(bytes.array, bytes.offset + p, bytes.offset + s, bytes.offset + end);
         }
     }
 
@@ -1971,7 +1981,7 @@ public abstract class StringNodes {
             final CodeRange cr = codeRangeNode.execute(rope);
             Rope buf = RopeConstants.EMPTY_ASCII_8BIT_ROPE;
 
-            final byte[] pBytes = bytesNode.execute(rope);
+            final Bytes pBytes = bytesNode.execute(rope);
             final int e = pBytes.length;
 
             int p = 0;
@@ -1982,7 +1992,7 @@ public abstract class StringNodes {
                 p = e;
             }
             while (p < e) {
-                int ret = calculateCharacterLengthNode.characterLength(enc, CR_BROKEN, Bytes.fromRange(pBytes, p, e));
+                int ret = calculateCharacterLengthNode.characterLength(enc, CR_BROKEN, pBytes.sliceRange(p, e));
                 if (MBCLEN_NEEDMORE_P(ret)) {
                     break;
                 } else if (MBCLEN_CHARFOUND_P(ret)) {
@@ -2046,7 +2056,7 @@ public abstract class StringNodes {
             final CodeRange cr = codeRangeNode.execute(rope);
             Rope buf = RopeConstants.EMPTY_ASCII_8BIT_ROPE;
 
-            final byte[] pBytes = bytesNode.execute(rope);
+            final Bytes pBytes = bytesNode.execute(rope);
             final int e = pBytes.length;
 
             int p = 0;
@@ -2054,7 +2064,7 @@ public abstract class StringNodes {
             final int mbminlen = enc.minLength();
 
             while (p < e) {
-                int ret = calculateCharacterLengthNode.characterLength(enc, CR_BROKEN, Bytes.fromRange(pBytes, p, e));
+                int ret = calculateCharacterLengthNode.characterLength(enc, CR_BROKEN, pBytes.sliceRange(p, e));
                 if (MBCLEN_NEEDMORE_P(ret)) {
                     break;
                 } else if (MBCLEN_CHARFOUND_P(ret)) {
@@ -2075,7 +2085,7 @@ public abstract class StringNodes {
                     } else {
                         clen -= mbminlen;
                         for (; clen > mbminlen; clen -= mbminlen) {
-                            ret = calculateCharacterLengthNode.characterLength(enc, cr, new Bytes(pBytes, q, clen));
+                            ret = calculateCharacterLengthNode.characterLength(enc, cr, pBytes.slice(q, clen));
                             if (MBCLEN_NEEDMORE_P(ret)) {
                                 break;
                             }
@@ -2140,8 +2150,8 @@ public abstract class StringNodes {
             }
 
             final CodeRange cr = codeRangeNode.execute(rope);
-            final byte[] inputBytes = bytesNode.execute(rope);
-            final byte[] outputBytes = StringSupport.swapcaseMultiByteAsciiSimple(enc, cr, inputBytes);
+            final Bytes inputBytes = bytesNode.execute(rope);
+            final Bytes outputBytes = StringSupport.swapcaseMultiByteAsciiSimple(enc, cr, inputBytes);
 
             if (modifiedProfile.profile(inputBytes != outputBytes)) {
                 string.setRope(
@@ -2258,11 +2268,11 @@ public abstract class StringNodes {
 
             int p = 0;
             int end = rope.byteLength();
-            byte[] bytes = rope.getBytes();
+            Bytes bytes = rope.getBytes();
 
             int len = 2;
             while (p < end) {
-                int c = bytes[p++] & 0xff;
+                int c = bytes.get(p++) & 0xff;
 
                 switch (c) {
                     case '"':
@@ -2310,50 +2320,50 @@ public abstract class StringNodes {
 
             RopeBuilder outBytes = new RopeBuilder();
             outBytes.unsafeEnsureSpace(len);
-            byte out[] = outBytes.getUnsafeBytes();
+            Bytes out = outBytes.getUnsafeBytes();
             int q = 0;
             p = 0;
             end = rope.byteLength();
 
-            out[q++] = '"';
+            out.set(q++, (byte) '"');
             while (p < end) {
-                int c = bytes[p++] & 0xff;
+                int c = bytes.get(p++) & 0xff;
                 if (c == '"' || c == '\\') {
-                    out[q++] = '\\';
-                    out[q++] = (byte) c;
+                    out.set(q++, (byte) '\\');
+                    out.set(q++, (byte) c);
                 } else if (c == '#') {
                     if (isEVStr(bytes, p, end)) {
-                        out[q++] = '\\';
+                        out.set(q++, (byte) '\\');
                     }
-                    out[q++] = '#';
+                    out.set(q++, (byte) '#');
                 } else if (c == '\n') {
-                    out[q++] = '\\';
-                    out[q++] = 'n';
+                    out.set(q++, (byte) '\\');
+                    out.set(q++, (byte) 'n');
                 } else if (c == '\r') {
-                    out[q++] = '\\';
-                    out[q++] = 'r';
+                    out.set(q++, (byte) '\\');
+                    out.set(q++, (byte) 'r');
                 } else if (c == '\t') {
-                    out[q++] = '\\';
-                    out[q++] = 't';
+                    out.set(q++, (byte) '\\');
+                    out.set(q++, (byte) 't');
                 } else if (c == '\f') {
-                    out[q++] = '\\';
-                    out[q++] = 'f';
+                    out.set(q++, (byte) '\\');
+                    out.set(q++, (byte) 'f');
                 } else if (c == '\013') {
-                    out[q++] = '\\';
-                    out[q++] = 'v';
+                    out.set(q++, (byte) '\\');
+                    out.set(q++, (byte) 'v');
                 } else if (c == '\010') {
-                    out[q++] = '\\';
-                    out[q++] = 'b';
+                    out.set(q++, (byte) '\\');
+                    out.set(q++, (byte) 'b');
                 } else if (c == '\007') {
-                    out[q++] = '\\';
-                    out[q++] = 'a';
+                    out.set(q++, (byte) '\\');
+                    out.set(q++, (byte) 'a');
                 } else if (c == '\033') {
-                    out[q++] = '\\';
-                    out[q++] = 'e';
+                    out.set(q++, (byte) '\\');
+                    out.set(q++, (byte) 'e');
                 } else if (ASCIIEncoding.INSTANCE.isPrint(c)) {
-                    out[q++] = (byte) c;
+                    out.set(q++, (byte) c);
                 } else {
-                    out[q++] = '\\';
+                    out.set(q++, (byte) '\\');
                     if (enc.isUTF8()) {
                         int n = StringSupport.characterLength(enc, cr, bytes, p - 1, end) - 1;
                         if (n > 0) {
@@ -2370,15 +2380,15 @@ public abstract class StringNodes {
                     q = outBytes.getLength();
                 }
             }
-            out[q++] = '"';
+            out.set(q++, (byte) '"');
             outBytes.setLength(q);
             assert out == outBytes.getUnsafeBytes(); // must not reallocate
 
             return outBytes;
         }
 
-        private static boolean isEVStr(byte[] bytes, int p, int end) {
-            return p < end ? isEVStr(bytes[p] & 0xff) : false;
+        private static boolean isEVStr(Bytes bytes, int p, int end) {
+            return p < end ? isEVStr(bytes.get(p) & 0xff) : false;
         }
 
         private static boolean isEVStr(int c) {
@@ -2605,7 +2615,7 @@ public abstract class StringNodes {
             boolean singlebyte = rope.isSingleByteOptimizable() && otherRope.isSingleByteOptimizable();
 
             if (singlebyte && otherRope.byteLength() == 1 && otherStrings.length == 1) {
-                squeeze[otherRope.getRawBytes()[0]] = true;
+                squeeze[otherRope.getRawBytes().get(0)] = true;
                 if (!StringSupport.singleByteSqueeze(buffer, squeeze)) {
                     return nil;
                 } else {
@@ -2689,7 +2699,7 @@ public abstract class StringNodes {
             // Copied from JRuby
 
             final Rope rope = strings.getRope(string);
-            final byte[] bytes = bytesNode.execute(rope);
+            final Bytes bytes = bytesNode.execute(rope);
             int p = 0;
             final int len = rope.byteLength();
             final int end = p + len;
@@ -2697,13 +2707,13 @@ public abstract class StringNodes {
             if (bits >= 8 * 8) { // long size * bits in byte
                 Object sum = 0;
                 while (p < end) {
-                    sum = addNode.call(sum, "+", bytes[p++] & 0xff);
+                    sum = addNode.call(sum, "+", bytes.get(p++) & 0xff);
                 }
                 return sum;
             } else {
                 long sum = 0;
                 while (p < end) {
-                    sum += bytes[p++] & 0xff;
+                    sum += bytes.get(p++) & 0xff;
                 }
                 return bits == 0 ? sum : sum & (1L << bits) - 1L;
             }
@@ -2831,12 +2841,12 @@ public abstract class StringNodes {
                 @Cached CodeRangeNode codeRangeNode,
                 @Cached SingleByteOptimizableNode singleByteOptimizableNode) {
             final Rope rope = string.rope;
-            final byte[] originalBytes = bytesNode.execute(rope);
+            final Bytes originalBytes = bytesNode.execute(rope);
             final int len = originalBytes.length;
-            final byte[] reversedBytes = new byte[len];
+            final Bytes reversedBytes = new Bytes(len);
 
             for (int i = 0; i < len; i++) {
-                reversedBytes[len - i - 1] = originalBytes[i];
+                reversedBytes.set(len - i - 1, originalBytes.get(i));
             }
 
             string.setRope(
@@ -2860,7 +2870,7 @@ public abstract class StringNodes {
             // Taken from org.jruby.RubyString#reverse!
 
             final Rope rope = string.rope;
-            final byte[] originalBytes = bytesNode.execute(rope);
+            final Bytes originalBytes = bytesNode.execute(rope);
             int p = 0;
             final int len = originalBytes.length;
 
@@ -2868,16 +2878,16 @@ public abstract class StringNodes {
             final CodeRange cr = codeRangeNode.execute(rope);
             final int end = p + len;
             int op = len;
-            final byte[] reversedBytes = new byte[len];
+            final Bytes reversedBytes = new Bytes(len);
 
             while (p < end) {
                 int cl = StringSupport.characterLength(enc, cr, originalBytes, p, end, true);
-                if (cl > 1 || (originalBytes[p] & 0x80) != 0) {
+                if (cl > 1 || (originalBytes.get(p) & 0x80) != 0) {
                     op -= cl;
-                    System.arraycopy(originalBytes, p, reversedBytes, op, cl);
+                    Bytes.copy(originalBytes, p, reversedBytes, op, cl);
                     p += cl;
                 } else {
-                    reversedBytes[--op] = originalBytes[p++];
+                    reversedBytes.set(--op, originalBytes.get(p++));
                 }
             }
 
@@ -3130,19 +3140,19 @@ public abstract class StringNodes {
             this.upperToLower = upperToLower;
         }
 
-        public abstract byte[] executeInvert(byte[] bytes, int start);
+        public abstract Bytes executeInvert(Bytes bytes, int start);
 
         @Specialization
-        protected byte[] invert(byte[] bytes, int start,
+        protected Bytes invert(Bytes bytes, int start,
                 @Cached BranchProfile foundLowerCaseCharProfile,
                 @Cached BranchProfile foundUpperCaseCharProfile,
                 @Cached LoopConditionProfile loopProfile) {
-            byte[] modified = null;
+            Bytes modified = null;
 
             int i = start;
             try {
                 for (; loopProfile.inject(i < bytes.length); i++) {
-                    final byte b = bytes[i];
+                    final byte b = bytes.get(i);
 
                     if (lowerToUpper && StringSupport.isAsciiLowercase(b)) {
                         foundLowerCaseCharProfile.enter();
@@ -3152,7 +3162,7 @@ public abstract class StringNodes {
                         }
 
                         // Convert lower-case ASCII char to upper-case.
-                        modified[i] ^= 0x20;
+                        modified.set(i, (byte) (modified.get(i) ^ 0x20));
                     }
 
                     if (upperToLower && StringSupport.isAsciiUppercase(b)) {
@@ -3163,7 +3173,7 @@ public abstract class StringNodes {
                         }
 
                         // Convert upper-case ASCII char to lower-case.
-                        modified[i] ^= 0x20;
+                        modified.set(i, (byte) (modified.get(i) ^ 0x20));
                     }
 
                     TruffleSafepoint.poll(this);
@@ -3208,8 +3218,8 @@ public abstract class StringNodes {
                 @Cached ConditionProfile noopProfile) {
             final Rope rope = string.rope;
 
-            final byte[] bytes = bytesNode.execute(rope);
-            byte[] modified = invertNode.executeInvert(bytes, 0);
+            final Bytes bytes = bytesNode.execute(rope);
+            Bytes modified = invertNode.executeInvert(bytes, 0);
 
             if (noopProfile.profile(modified == null)) {
                 return nil;
@@ -3258,8 +3268,8 @@ public abstract class StringNodes {
             }
 
             final CodeRange cr = codeRangeNode.execute(rope);
-            final byte[] inputBytes = bytesNode.execute(rope);
-            final byte[] outputBytes = StringSupport.upcaseMultiByteAsciiSimple(encoding, cr, inputBytes);
+            final Bytes inputBytes = bytesNode.execute(rope);
+            final Bytes outputBytes = StringSupport.upcaseMultiByteAsciiSimple(encoding, cr, inputBytes);
 
             if (modifiedProfile.profile(inputBytes != outputBytes)) {
                 string.setRope(
@@ -3340,15 +3350,15 @@ public abstract class StringNodes {
                 return nil;
             }
 
-            final byte[] sourceBytes = bytesNode.execute(rope);
-            final byte[] finalBytes;
+            final Bytes sourceBytes = bytesNode.execute(rope);
+            final Bytes finalBytes;
 
-            final byte[] processedBytes = invertAsciiCaseNode.executeInvert(sourceBytes, 1);
+            final Bytes processedBytes = invertAsciiCaseNode.executeInvert(sourceBytes, 1);
 
             if (otherCharsAlreadyLowerProfile.profile(processedBytes == null)) {
                 // Bytes 1..N are either not letters or already lowercased. Time to check the first byte.
 
-                if (firstCharIsLowerProfile.profile(StringSupport.isAsciiLowercase(sourceBytes[0]))) {
+                if (firstCharIsLowerProfile.profile(StringSupport.isAsciiLowercase(sourceBytes.get(0)))) {
                     // The first char requires capitalization, but the remaining bytes in the original string are
                     // already properly cased.
                     finalBytes = sourceBytes.clone();
@@ -3361,8 +3371,8 @@ public abstract class StringNodes {
                 finalBytes = processedBytes;
             }
 
-            if (mustCapitalizeFirstCharProfile.profile(StringSupport.isAsciiLowercase(sourceBytes[0]))) {
-                finalBytes[0] ^= 0x20;
+            if (mustCapitalizeFirstCharProfile.profile(StringSupport.isAsciiLowercase(sourceBytes.get(0)))) {
+                finalBytes.set(0, (byte) (finalBytes.get(0) ^ 0x20));
             }
 
             string.setRope(
@@ -3397,8 +3407,8 @@ public abstract class StringNodes {
             }
 
             final CodeRange cr = codeRangeNode.execute(rope);
-            final byte[] inputBytes = bytesNode.execute(rope);
-            final byte[] outputBytes = StringSupport.capitalizeMultiByteAsciiSimple(enc, cr, inputBytes);
+            final Bytes inputBytes = bytesNode.execute(rope);
+            final Bytes outputBytes = StringSupport.capitalizeMultiByteAsciiSimple(enc, cr, inputBytes);
 
             if (modifiedProfile.profile(inputBytes != outputBytes)) {
                 string.setRope(
@@ -3551,12 +3561,12 @@ public abstract class StringNodes {
             int storeIndex = 0;
 
             final Rope rope = strings.getRope(string);
-            final byte[] bytes = bytesNode.execute(rope);
+            final Bytes bytes = bytesNode.execute(rope);
 
             int substringStart = 0;
             boolean findingSubstringEnd = false;
             for (int i = 0; i < bytes.length; i++) {
-                if (StringSupport.isAsciiSpace(bytes[i])) {
+                if (StringSupport.isAsciiSpace(bytes.get(i))) {
                     if (findingSubstringEnd) {
                         findingSubstringEnd = false;
 
@@ -3589,7 +3599,8 @@ public abstract class StringNodes {
                 ret = addSubstring(ret, storeIndex++, substring, block, executeBlockProfile, growArrayProfile);
             }
 
-            if (trailingEmptyStringProfile.profile(limit < 0 && StringSupport.isAsciiSpace(bytes[bytes.length - 1]))) {
+            if (trailingEmptyStringProfile
+                    .profile(limit < 0 && StringSupport.isAsciiSpace(bytes.get(bytes.length - 1)))) {
                 final RubyString substring = substringNode.executeSubstring(string, bytes.length - 1, 0);
                 ret = addSubstring(ret, storeIndex++, substring, block, executeBlockProfile, growArrayProfile);
             }
@@ -3616,7 +3627,7 @@ public abstract class StringNodes {
             final boolean limitPositive = limit > 0;
             int i = limit > 0 ? 1 : 0;
 
-            final byte[] bytes = bytesNode.execute(rope);
+            final Bytes bytes = bytesNode.execute(rope);
             int p = 0;
             int ptr = p;
             int len = rope.byteLength();
@@ -3800,11 +3811,11 @@ public abstract class StringNodes {
             final Rope rope = strings.getRope(string);
             final RubyEncoding encoding = getActualEncodingNode.execute(rope, strings.getEncoding(string));
             final int end = rope.byteLength();
-            final byte[] bytes = bytesNode.execute(rope);
+            final Bytes bytes = bytesNode.execute(rope);
             final int c = calculateCharacterLengthNode.characterLength(
                     encoding.jcoding,
                     codeRangeNode.execute(rope),
-                    Bytes.fromRange(bytes, byteIndex, end));
+                    bytes.sliceRange(byteIndex, end));
 
             if (!StringSupport.MBCLEN_CHARFOUND_P(c)) {
                 return nil;
@@ -3815,7 +3826,7 @@ public abstract class StringNodes {
             }
 
             return makeStringNode.executeMake(
-                    ArrayUtils.extractRange(bytes, byteIndex, byteIndex + c),
+                    Bytes.extractRange(bytes, byteIndex, byteIndex + c),
                     encoding,
                     CR_UNKNOWN);
         }
@@ -3895,7 +3906,7 @@ public abstract class StringNodes {
         @TruffleBoundary
         private static Rope rbStrEscape(Rope str) {
             final Encoding enc = str.getEncoding();
-            final byte[] pBytes = str.getBytes();
+            final Bytes pBytes = str.getBytes();
             final CodeRange cr = str.getCodeRange();
 
             int p = 0;
@@ -3918,14 +3929,14 @@ public abstract class StringNodes {
                     }
                     while ((n--) > 0) {
                         result.append(
-                                String.format("\\x%02X", (long) (pBytes[p] & 0377)).getBytes(
+                                String.format("\\x%02X", (long) (pBytes.get(p) & 0377)).getBytes(
                                         StandardCharsets.US_ASCII));
                         prev = ++p;
                     }
                     continue;
                 }
                 n = MBCLEN_CHARFOUND_LEN(n);
-                c = enc.mbcToCode(pBytes, p, pend);
+                c = enc.mbcToCode(pBytes.array, pBytes.offset + p, pBytes.offset + pend);
                 p += n;
                 switch (c) {
                     case '\n':
@@ -4101,7 +4112,7 @@ public abstract class StringNodes {
             } else if (isAscii8BitProfile.profile(encoding == ASCIIEncoding.INSTANCE)) {
                 rope = RopeConstants.ASCII_8BIT_SINGLE_BYTE_ROPES[intCode];
             } else {
-                rope = RopeOperations.create(new byte[]{ (byte) intCode }, encoding, CodeRange.CR_UNKNOWN);
+                rope = RopeOperations.create(Bytes.of((byte) intCode), encoding, CodeRange.CR_UNKNOWN);
             }
 
             return makeStringNode.fromRope(rope, rubyEncoding);
@@ -4119,14 +4130,14 @@ public abstract class StringNodes {
                 throw new RaiseException(getContext(), coreExceptions().rangeError(code, rubyEncoding, this));
             }
 
-            final byte[] bytes = new byte[length];
+            final Bytes bytes = new Bytes(length);
             final int codeToMbc = StringSupport.codeToMbc(encoding, (int) code, bytes, 0);
             if (codeToMbc < 0) {
                 errorProfile.enter();
                 throw new RaiseException(getContext(), coreExceptions().rangeError(code, rubyEncoding, this));
             }
 
-            final Bytes bytesObject = new Bytes(bytes, 0, length);
+            final Bytes bytesObject = bytes.slice(0, length);
             if (calculateCharacterLengthNode.characterLength(encoding, CR_UNKNOWN, bytesObject) != length) {
                 errorProfile.enter();
                 throw new RaiseException(getContext(), coreExceptions().rangeError(code, rubyEncoding, this));
@@ -4235,10 +4246,11 @@ public abstract class StringNodes {
                 return nil;
             }
 
-            final byte[] sourceBytes = bytesNode.execute(sourceRope);
-            final byte searchByte = bytesNode.execute(libPattern.getRope(pattern))[0];
+            final Bytes sourceBytes = bytesNode.execute(sourceRope);
+            final byte searchByte = bytesNode.execute(libPattern.getRope(pattern)).get(0);
 
-            final int index = com.oracle.truffle.api.ArrayUtils.indexOf(sourceBytes, byteOffset, end, searchByte);
+            final int index = com.oracle.truffle.api.ArrayUtils
+                    .indexOf(sourceBytes.array, sourceBytes.offset + byteOffset, sourceBytes.offset + end, searchByte);
 
             return index == -1 ? nil : index;
         }
@@ -4261,16 +4273,16 @@ public abstract class StringNodes {
             checkEncoding(string, pattern);
 
             final Rope sourceRope = libString.getRope(string);
-            final byte[] sourceBytes = bytesNode.execute(sourceRope);
+            final Bytes sourceBytes = bytesNode.execute(sourceRope);
             final Rope searchRope = libPattern.getRope(pattern);
-            final byte[] searchBytes = bytesNode.execute(searchRope);
+            final Bytes searchBytes = bytesNode.execute(searchRope);
 
             int end = sourceRope.byteLength() - searchRope.byteLength();
 
             int i = byteOffset;
             try {
                 for (; loopProfile.inject(i <= end); i++) {
-                    if (sourceBytes[i] == searchBytes[0]) {
+                    if (sourceBytes.get(i) == searchBytes.get(0)) {
                         if (ArrayUtils.regionEquals(sourceBytes, i, searchBytes, 0, searchRope.byteLength())) {
                             matchFoundProfile.enter();
                             return i;
@@ -4343,7 +4355,7 @@ public abstract class StringNodes {
             if (sourceLen - byteOffset < otherLen) {
                 return -1;
             }
-            byte[] bytes = source.getBytes();
+            Bytes bytes = source.getBytes();
             int p = 0;
             final int end = source.byteLength();
             if (byteOffset != 0) {
@@ -4363,7 +4375,8 @@ public abstract class StringNodes {
                     return pos;
                 }
                 pos -= p;
-                int t = enc.rightAdjustCharHead(bytes, p, p + pos, end);
+                int t = enc
+                        .rightAdjustCharHead(bytes.array, bytes.offset + p, bytes.offset + p + pos, bytes.offset + end);
                 if (t == p + pos) {
                     return pos + byteOffset;
                 }
@@ -4379,10 +4392,10 @@ public abstract class StringNodes {
         private int indexOf(Rope sourceRope, Rope otherRope, int fromIndex) {
             // Taken from org.jruby.util.ByteList.indexOf.
 
-            final byte[] source = sourceRope.getBytes();
+            final Bytes source = sourceRope.getBytes();
             final int sourceOffset = 0;
             final int sourceCount = sourceRope.byteLength();
-            final byte[] target = otherRope.getBytes();
+            final Bytes target = otherRope.getBytes();
             final int targetOffset = 0;
             final int targetCount = otherRope.byteLength();
 
@@ -4396,19 +4409,19 @@ public abstract class StringNodes {
                 return fromIndex;
             }
 
-            byte first = target[targetOffset];
+            byte first = target.get(targetOffset);
             int max = sourceOffset + (sourceCount - targetCount);
 
             for (int i = sourceOffset + fromIndex; i <= max; i++) {
-                if (source[i] != first) {
-                    while (++i <= max && source[i] != first) {
+                if (source.get(i) != first) {
+                    while (++i <= max && source.get(i) != first) {
                     }
                 }
 
                 if (i <= max) {
                     int j = i + 1;
                     int end = j + targetCount - 1;
-                    for (int k = targetOffset + 1; j < end && source[j] == target[k]; j++, k++) {
+                    for (int k = targetOffset + 1; j < end && source.get(j) == target.get(k); j++, k++) {
                     }
 
                     if (j == end) {
@@ -4485,7 +4498,7 @@ public abstract class StringNodes {
             // Taken from Rubinius's String::find_byte_character_index and Encoding::find_byte_character_index.
 
             final Rope rope = libString.getRope(string);
-            final byte[] bytes = rope.getBytes();
+            final Bytes bytes = rope.getBytes();
             final Encoding encoding = rope.getEncoding();
             final CodeRange codeRange = rope.getCodeRange();
             int p = 0;
@@ -4538,8 +4551,8 @@ public abstract class StringNodes {
             final int pe = patternRope.byteLength();
             final int l = e - pe + 1;
 
-            final byte[] stringBytes = stringBytesNode.execute(stringRope);
-            final byte[] patternBytes = patternBytesNode.execute(patternRope);
+            final Bytes stringBytes = stringBytesNode.execute(stringRope);
+            final Bytes patternBytes = patternBytesNode.execute(patternRope);
 
             try {
                 for (; loopProfile.inject(p < l); p++) {
@@ -4572,8 +4585,8 @@ public abstract class StringNodes {
             final int pe = patternRope.byteLength();
             final int l = e - pe + 1;
 
-            final byte[] stringBytes = stringBytesNode.execute(stringRope);
-            final byte[] patternBytes = patternBytesNode.execute(patternRope);
+            final Bytes stringBytes = stringBytesNode.execute(stringRope);
+            final Bytes patternBytes = patternBytesNode.execute(patternRope);
 
             final Encoding enc = stringRope.getEncoding();
             final CodeRange cr = stringRope.getCodeRange();
@@ -4581,7 +4594,7 @@ public abstract class StringNodes {
             int index = 0;
 
             while (p < e && index < offset) {
-                c = calculateCharacterLengthNode.characterLength(enc, cr, Bytes.fromRange(stringBytes, p, e));
+                c = calculateCharacterLengthNode.characterLength(enc, cr, stringBytes.sliceRange(p, e));
                 if (StringSupport.MBCLEN_CHARFOUND_P(c)) {
                     p += c;
                     index++;
@@ -4591,7 +4604,7 @@ public abstract class StringNodes {
             }
 
             for (; p < l; p += c, ++index) {
-                c = calculateCharacterLengthNode.characterLength(enc, cr, Bytes.fromRange(stringBytes, p, e));
+                c = calculateCharacterLengthNode.characterLength(enc, cr, stringBytes.sliceRange(p, e));
                 if (!StringSupport.MBCLEN_CHARFOUND_P(c)) {
                     return nil;
                 }
@@ -4644,8 +4657,8 @@ public abstract class StringNodes {
             final int pe = patternRope.byteLength();
             final int l = e - pe + 1;
 
-            final byte[] stringBytes = stringBytesNode.execute(stringRope);
-            final byte[] patternBytes = patternBytesNode.execute(patternRope);
+            final Bytes stringBytes = stringBytesNode.execute(stringRope);
+            final Bytes patternBytes = patternBytesNode.execute(patternRope);
 
             try {
                 for (; loopProfile.inject(p < l); p++) {
@@ -4677,15 +4690,15 @@ public abstract class StringNodes {
             final int pe = patternRope.byteLength();
             final int l = e - pe + 1;
 
-            final byte[] stringBytes = stringBytesNode.execute(stringRope);
-            final byte[] patternBytes = patternBytesNode.execute(patternRope);
+            final Bytes stringBytes = stringBytesNode.execute(stringRope);
+            final Bytes patternBytes = patternBytesNode.execute(patternRope);
 
             final Encoding enc = stringRope.getEncoding();
             final CodeRange cr = stringRope.getCodeRange();
             int c;
 
             for (; p < l; p += c) {
-                c = calculateCharacterLengthNode.characterLength(enc, cr, Bytes.fromRange(stringBytes, p, e));
+                c = calculateCharacterLengthNode.characterLength(enc, cr, stringBytes.sliceRange(p, e));
                 if (!StringSupport.MBCLEN_CHARFOUND_P(c)) {
                     return nil;
                 }
@@ -4748,7 +4761,7 @@ public abstract class StringNodes {
             // Taken from Rubinius's String::byte_index.
 
             final Encoding enc = rope.getEncoding();
-            final byte[] bytes = bytesNode.execute(rope);
+            final Bytes bytes = bytesNode.execute(rope);
             final int e = rope.byteLength();
             int p = startByteOffset;
 
@@ -4756,7 +4769,7 @@ public abstract class StringNodes {
 
             for (i = 0; i < k && p < e; i++) {
                 final int c = calculateCharacterLengthNode
-                        .characterLength(enc, codeRangeNode.execute(rope), Bytes.fromRange(bytes, p, e));
+                        .characterLength(enc, codeRangeNode.execute(rope), bytes.sliceRange(p, e));
 
                 // TODO (nirvdrum 22-Dec-16): Consider having a specialized version for CR_BROKEN strings to avoid these checks.
                 // If it's an invalid byte, just treat it as a single byte
@@ -4856,7 +4869,11 @@ public abstract class StringNodes {
             final int p = 0;
             final int end = p + rope.byteLength();
 
-            final int b = rope.getEncoding().prevCharHead(rope.getBytes(), p, p + index, end);
+            final int b = rope.getEncoding().prevCharHead(
+                    rope.getBytes().array,
+                    rope.getBytes().offset + p,
+                    rope.getBytes().offset + p + index,
+                    rope.getBytes().offset + end);
 
             if (b == -1) {
                 return nil;
@@ -4901,8 +4918,8 @@ public abstract class StringNodes {
 
             final Rope sourceRope = libString.getRope(string);
             final int end = sourceRope.byteLength();
-            final byte[] sourceBytes = bytesNode.execute(sourceRope);
-            final byte searchByte = bytesNode.execute(patternRope)[0];
+            final Bytes sourceBytes = bytesNode.execute(sourceRope);
+            final byte searchByte = bytesNode.execute(patternRope).get(0);
             int normalizedStart = byteOffset;
 
             if (normalizedStart >= end) {
@@ -4913,7 +4930,7 @@ public abstract class StringNodes {
             int i = normalizedStart;
             try {
                 for (; loopProfile.inject(i >= 0); i--) {
-                    if (sourceBytes[i] == searchByte) {
+                    if (sourceBytes.get(i) == searchByte) {
                         matchFoundProfile.enter();
                         return i;
                     }
@@ -4948,9 +4965,9 @@ public abstract class StringNodes {
 
             final Rope sourceRope = libString.getRope(string);
             final int end = sourceRope.byteLength();
-            final byte[] sourceBytes = bytesNode.execute(sourceRope);
+            final Bytes sourceBytes = bytesNode.execute(sourceRope);
             final int matchSize = patternRope.byteLength();
-            final byte[] searchBytes = bytesNode.execute(patternRope);
+            final Bytes searchBytes = bytesNode.execute(patternRope);
             int normalizedStart = byteOffset;
 
             if (normalizedStart >= end) {
@@ -4966,7 +4983,7 @@ public abstract class StringNodes {
             int i = normalizedStart;
             try {
                 for (; loopProfile.inject(i >= 0); i--) {
-                    if (sourceBytes[i] == searchBytes[0]) {
+                    if (sourceBytes.get(i) == searchBytes.get(0)) {
                         if (ArrayUtils.regionEquals(sourceBytes, i, searchBytes, 0, matchSize)) {
                             matchFoundProfile.enter();
                             return i;
@@ -5119,12 +5136,12 @@ public abstract class StringNodes {
         protected RubyString stringPattern(RubyClass stringClass, int size, Object pattern,
                 @CachedLibrary(limit = "2") RubyStringLibrary libPattern) {
             final Rope rope = libPattern.getRope(pattern);
-            final byte[] bytes = new byte[size];
+            final Bytes bytes = new Bytes(size);
 
             // TODO (nirvdrum 21-Jan-16): Investigate whether using a ConcatRope (potentially combined with a RepeatingRope) would be better here.
             if (!rope.isEmpty()) {
                 for (int n = 0; n < size; n += rope.byteLength()) {
-                    System.arraycopy(rope.getBytes(), 0, bytes, n, Math.min(rope.byteLength(), size - n));
+                    Bytes.copy(rope.getBytes(), 0, bytes, n, Math.min(rope.byteLength(), size - n));
                 }
             }
 
@@ -5301,7 +5318,7 @@ public abstract class StringNodes {
             final Rope left = string.rope;
             final Rope right = libOther.getRope(other);
 
-            // The semantics of this primitive are such that the original string's byte[] should be extended without
+            // The semantics of this primitive are such that the original string's Bytes should be extended without
             // negotiating the encoding.
             string.setRope(concatNode.executeConcat(left, right, left.getEncoding()));
             return string;
@@ -5558,8 +5575,8 @@ public abstract class StringNodes {
         protected RubyString stringFromByteArray(
                 RubyByteArray byteArray, int start, int count, RubyEncoding rubyEncoding,
                 @Cached StringNodes.MakeStringNode makeStringNode) {
-            final byte[] bytes = byteArray.bytes;
-            final byte[] array = ArrayUtils.extractRange(bytes, start, start + count);
+            final Bytes bytes = new Bytes(byteArray.bytes);
+            final Bytes array = Bytes.extractRange(bytes, start, start + count);
 
             return makeStringNode.executeMake(array, rubyEncoding, CR_UNKNOWN);
         }
@@ -5615,10 +5632,10 @@ public abstract class StringNodes {
         protected Object stringToNullTerminatedByteArray(Object string,
                 @Cached BytesNode bytesNode,
                 @CachedLibrary(limit = "2") RubyStringLibrary libString) {
-            // NOTE: we always need one copy here, as native code could modify the passed byte[]
-            final byte[] bytes = bytesNode.execute(libString.getRope(string));
+            // NOTE: we always need one copy here, as native code could modify the passed Bytes
+            final Bytes bytes = bytesNode.execute(libString.getRope(string));
             final byte[] bytesWithNull = new byte[bytes.length + 1];
-            System.arraycopy(bytes, 0, bytesWithNull, 0, bytes.length);
+            System.arraycopy(bytes.array, bytes.offset, bytesWithNull, 0, bytes.length);
 
             return getContext().getEnv().asGuestValue(bytesWithNull);
         }

@@ -26,6 +26,7 @@ import org.truffleruby.builtins.UnaryCoreMethodNode;
 import org.truffleruby.core.encoding.Encodings;
 import org.truffleruby.core.klass.RubyClass;
 import org.truffleruby.core.numeric.BigIntegerOps;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeConstants;
@@ -281,7 +282,7 @@ public abstract class PointerNodes {
             final byte[] bytes = ptr
                     .readZeroTerminatedByteArray(getContext(), interop, 0, limit);
             final Rope rope = makeLeafRopeNode
-                    .executeMake(bytes, ASCIIEncoding.INSTANCE, CodeRange.CR_UNKNOWN, NotProvided.INSTANCE);
+                    .executeMake(new Bytes(bytes), ASCIIEncoding.INSTANCE, CodeRange.CR_UNKNOWN, NotProvided.INSTANCE);
 
             final RubyString instance = new RubyString(
                     coreLibrary().stringClass,
@@ -302,7 +303,7 @@ public abstract class PointerNodes {
             final byte[] bytes = ptr
                     .readZeroTerminatedByteArray(getContext(), interop, 0);
             final Rope rope = makeLeafRopeNode
-                    .executeMake(bytes, ASCIIEncoding.INSTANCE, CodeRange.CR_UNKNOWN, NotProvided.INSTANCE);
+                    .executeMake(new Bytes(bytes), ASCIIEncoding.INSTANCE, CodeRange.CR_UNKNOWN, NotProvided.INSTANCE);
 
             final RubyString instance = new RubyString(
                     coreLibrary().stringClass,
@@ -339,7 +340,11 @@ public abstract class PointerNodes {
                 final byte[] bytes = new byte[length];
                 ptr.readBytes(0, bytes, 0, length);
                 final Rope rope = makeLeafRopeNode
-                        .executeMake(bytes, ASCIIEncoding.INSTANCE, CodeRange.CR_UNKNOWN, NotProvided.INSTANCE);
+                        .executeMake(
+                                new Bytes(bytes),
+                                ASCIIEncoding.INSTANCE,
+                                CodeRange.CR_UNKNOWN,
+                                NotProvided.INSTANCE);
                 final RubyString instance = new RubyString(
                         coreLibrary().stringClass,
                         getLanguage().stringShape,
@@ -368,7 +373,8 @@ public abstract class PointerNodes {
                 checkNull(ptr);
             }
 
-            ptr.writeBytes(0, bytesNode.execute(rope), index, length);
+            final Bytes bytes = bytesNode.execute(rope);
+            ptr.writeBytes(0, bytes.array, bytes.offset + index, length);
             return string;
         }
 

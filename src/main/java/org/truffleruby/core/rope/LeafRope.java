@@ -13,13 +13,13 @@ import org.jcodings.Encoding;
 
 public abstract class LeafRope extends ManagedRope {
 
-    public LeafRope(byte[] bytes, Encoding encoding, CodeRange codeRange, int characterLength) {
+    public LeafRope(Bytes bytes, Encoding encoding, CodeRange codeRange, int characterLength) {
         super(encoding, codeRange, bytes.length, characterLength, bytes);
     }
 
     @Override
     public byte getByteSlow(int index) {
-        return getRawBytes()[index];
+        return getRawBytes().get(index);
     }
 
 }

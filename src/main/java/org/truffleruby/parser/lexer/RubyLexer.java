@@ -50,7 +50,6 @@ import static org.truffleruby.core.string.StringSupport.isAsciiSpace;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -64,6 +63,7 @@ import org.truffleruby.RubyContext;
 import org.truffleruby.SuppressFBWarnings;
 import org.truffleruby.collections.ByteArrayBuilder;
 import org.truffleruby.core.array.ArrayUtils;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.BytesKey;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.Rope;
@@ -425,9 +425,9 @@ public class RubyLexer implements MagicCommentHandler {
     }
 
     private static final Rope TRUE = RopeOperations
-            .create(new byte[]{ 't', 'r', 'u', 'e' }, ASCIIEncoding.INSTANCE, CR_7BIT);
+            .create(new Bytes(new byte[]{ 't', 'r', 'u', 'e' }), ASCIIEncoding.INSTANCE, CR_7BIT);
     private static final Rope FALSE = RopeOperations
-            .create(new byte[]{ 'f', 'a', 'l', 's', 'e' }, ASCIIEncoding.INSTANCE, CR_7BIT);
+            .create(new Bytes(new byte[]{ 'f', 'a', 'l', 's', 'e' }), ASCIIEncoding.INSTANCE, CR_7BIT);
 
     protected int asTruth(String name, Rope value) {
         int result = RopeOperations.caseInsensitiveCmp(value, TRUE);
@@ -1132,13 +1132,13 @@ public class RubyLexer implements MagicCommentHandler {
         return c;
     }
 
-    private static boolean hasShebangLine(byte[] bytes) {
-        return bytes.length > 2 && bytes[0] == '#' && bytes[1] == '!';
+    private static boolean hasShebangLine(Bytes bytes) {
+        return bytes.length > 2 && bytes.get(0) == '#' && bytes.get(1) == '!';
     }
 
-    private static int newLineIndex(byte[] bytes, int start) {
+    private static int newLineIndex(Bytes bytes, int start) {
         for (int i = start; i < bytes.length; i++) {
-            if (bytes[i] == '\n') {
+            if (bytes.get(i) == '\n') {
                 return i;
             }
         }
@@ -1149,7 +1149,7 @@ public class RubyLexer implements MagicCommentHandler {
     /** Peak in source to see if there is a magic comment. This is used by eval() & friends to know the actual encoding
      * of the source code, and be able to convert to a Java String faithfully. */
     public static void parseMagicComment(Rope source, BiConsumer<String, Rope> magicCommentHandler) {
-        final byte[] bytes = source.getBytes();
+        final Bytes bytes = source.getBytes();
         final int length = source.byteLength();
         int start = 0;
 
@@ -1158,11 +1158,11 @@ public class RubyLexer implements MagicCommentHandler {
         }
 
         // Skip leading spaces but don't jump to another line
-        while (start < length && isAsciiSpace(bytes[start]) && bytes[start] != '\n') {
+        while (start < length && isAsciiSpace(bytes.get(start)) && bytes.get(start) != '\n') {
             start++;
         }
 
-        if (start < length && bytes[start] == '#') {
+        if (start < length && bytes.get(start) == '#') {
             start++;
 
             final int magicLineStart = start;
@@ -1337,13 +1337,13 @@ public class RubyLexer implements MagicCommentHandler {
 
     /* MRI: magic_comment_marker Find -*-, as in emacs "file local variable" (special comment at the top of the file) */
     private static int findEmacsStyleMarker(Rope str, int begin, int end) {
-        final byte[] bytes = str.getBytes();
+        final Bytes bytes = str.getBytes();
         int i = begin;
 
         while (i < end) {
-            switch (bytes[i]) {
+            switch (bytes.get(i)) {
                 case '-':
-                    if (i >= 2 && bytes[i - 1] == '*' && bytes[i - 2] == '-') {
+                    if (i >= 2 && bytes.get(i - 1) == '*' && bytes.get(i - 2) == '-') {
                         return i + 1;
                     }
                     i += 2;
@@ -1353,9 +1353,9 @@ public class RubyLexer implements MagicCommentHandler {
                         return -1;
                     }
 
-                    if (bytes[i + 1] != '-') {
+                    if (bytes.get(i + 1) != '-') {
                         i += 4;
-                    } else if (bytes[i - 1] != '-') {
+                    } else if (bytes.get(i - 1) != '-') {
                         i += 2;
                     } else {
                         return i + 2;
@@ -1612,7 +1612,7 @@ public class RubyLexer implements MagicCommentHandler {
             case '>': /* $>: default output handle */
             case '\"': /* $": already loaded files */
                 yaccValue = RopeOperations
-                        .create(new byte[]{ '$', (byte) c }, USASCIIEncoding.INSTANCE, CodeRange.CR_7BIT);
+                        .create(new Bytes(new byte[]{ '$', (byte) c }), USASCIIEncoding.INSTANCE, CodeRange.CR_7BIT);
                 return RubyParser.tGVAR;
 
             case '-':
@@ -1637,7 +1637,10 @@ public class RubyLexer implements MagicCommentHandler {
                 // Explicit reference to these vars as symbols...
                 if (isLexState(last_state, EXPR_FNAME)) {
                     yaccValue = RopeOperations
-                            .create(new byte[]{ '$', (byte) c }, USASCIIEncoding.INSTANCE, CodeRange.CR_7BIT);
+                            .create(
+                                    new Bytes(new byte[]{ '$', (byte) c }),
+                                    USASCIIEncoding.INSTANCE,
+                                    CodeRange.CR_7BIT);
                     return RubyParser.tGVAR;
                 }
 
@@ -3268,7 +3271,7 @@ public class RubyLexer implements MagicCommentHandler {
     }
 
     public int p(int offset) {
-        return lexb.getBytes()[offset] & 0xff;
+        return lexb.getBytes().get(offset) & 0xff;
     }
 
     public boolean peek(int c) {
@@ -3483,7 +3486,7 @@ public class RubyLexer implements MagicCommentHandler {
     }
 
     public void tokCopy(int length, RopeBuilder buffer) {
-        buffer.append(ArrayUtils.extractRange(lexb.getBytes(), lex_p - length, lex_p));
+        buffer.append(Bytes.extractRange(lexb.getBytes(), lex_p - length, lex_p));
     }
 
     public boolean tokadd_ident(int c) {
@@ -3542,8 +3545,8 @@ public class RubyLexer implements MagicCommentHandler {
     public void tokaddmbc(int codepoint, RopeBuilder buffer) {
         Encoding encoding = buffer.getEncoding();
         int length = encoding.codeToMbcLength(codepoint);
-        final byte[] bytes = Arrays.copyOf(buffer.getBytes(), buffer.getLength() + length);
-        encoding.codeToMbc(codepoint, bytes, buffer.getLength());
+        final Bytes bytes = Bytes.copyOf(buffer.getBytes(), buffer.getLength() + length);
+        encoding.codeToMbc(codepoint, bytes.array, bytes.offset + buffer.getLength());
         buffer.clear();
         buffer.append(bytes);
     }
@@ -3694,13 +3697,13 @@ public class RubyLexer implements MagicCommentHandler {
     public static final int EOF = -1; // 0 in MRI
 
     public static final Rope END_MARKER = RopeOperations
-            .create(new byte[]{ '_', '_', 'E', 'N', 'D', '_', '_' }, ASCIIEncoding.INSTANCE, CR_7BIT);
+            .create(new Bytes(new byte[]{ '_', '_', 'E', 'N', 'D', '_', '_' }), ASCIIEncoding.INSTANCE, CR_7BIT);
     public static final Rope BEGIN_DOC_MARKER = RopeOperations
-            .create(new byte[]{ 'b', 'e', 'g', 'i', 'n' }, ASCIIEncoding.INSTANCE, CR_7BIT);
+            .create(new Bytes(new byte[]{ 'b', 'e', 'g', 'i', 'n' }), ASCIIEncoding.INSTANCE, CR_7BIT);
     public static final Rope END_DOC_MARKER = RopeOperations
-            .create(new byte[]{ 'e', 'n', 'd' }, ASCIIEncoding.INSTANCE, CR_7BIT);
+            .create(new Bytes(new byte[]{ 'e', 'n', 'd' }), ASCIIEncoding.INSTANCE, CR_7BIT);
     public static final Rope CODING = RopeOperations
-            .create(new byte[]{ 'c', 'o', 'd', 'i', 'n', 'g' }, ASCIIEncoding.INSTANCE, CR_7BIT);
+            .create(new Bytes(new byte[]{ 'c', 'o', 'd', 'i', 'n', 'g' }), ASCIIEncoding.INSTANCE, CR_7BIT);
 
     public static final int SUFFIX_R = 1 << 0;
     public static final int SUFFIX_I = 1 << 1;
@@ -3774,8 +3777,9 @@ public class RubyLexer implements MagicCommentHandler {
         if (ropeEncoding.isAsciiCompatible() && isASCII(firstByte)) {
             return StringSupport.isAsciiUppercase((byte) firstByte);
         } else {
-            byte[] ropeBytes = rope.getBytes();
-            int firstCharacter = ropeEncoding.mbcToCode(ropeBytes, 0, ropeBytes.length);
+            Bytes ropeBytes = rope.getBytes();
+            int firstCharacter = ropeEncoding
+                    .mbcToCode(ropeBytes.array, ropeBytes.offset, ropeBytes.offset + ropeBytes.length);
             return ropeEncoding.isUpper(firstCharacter);
         }
     }

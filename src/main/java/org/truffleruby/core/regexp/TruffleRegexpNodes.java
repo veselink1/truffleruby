@@ -58,6 +58,7 @@ import org.truffleruby.core.hash.library.HashStoreLibrary;
 import org.truffleruby.core.kernel.KernelNodes.SameOrEqualNode;
 import org.truffleruby.core.regexp.RegexpNodes.ToSNode;
 import org.truffleruby.core.regexp.TruffleRegexpNodesFactory.MatchNodeGen;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeBuilder;
@@ -174,8 +175,8 @@ public class TruffleRegexpNodes {
     }
 
     @TruffleBoundary
-    private static Matcher getMatcher(Regex regex, byte[] stringBytes, int start) {
-        return regex.matcher(stringBytes, start, stringBytes.length);
+    private static Matcher getMatcher(Regex regex, Bytes stringBytes, int start) {
+        return regex.matcher(stringBytes.array, stringBytes.offset + start, stringBytes.offset + stringBytes.length);
     }
 
     @TruffleBoundary
@@ -816,7 +817,7 @@ public class TruffleRegexpNodes {
 
             int fromIndex = fromPos;
             final Object interopByteArray;
-            final String execMethod;
+            final String execMethod = "exec";
             if (startPosNotZeroProfile.profile(startPos > 0)) {
                 // GR-32765: When adopting TruffleString, use a TruffleString substring here instead
                 // If startPos != 0, then fromPos == startPos.
@@ -828,11 +829,8 @@ public class TruffleRegexpNodes {
                     getBytesObjectNode = insert(RopeNodes.GetBytesObjectNode.create());
                 }
                 interopByteArray = getBytesObjectNode.getRange(rope, startPos, toPos);
-                execMethod = "exec";
             } else {
-                final byte[] bytes = bytesNode.execute(rope);
-                interopByteArray = getContext().getEnv().asGuestValue(bytes);
-                execMethod = "execBytes";
+                interopByteArray = bytesNode.execute(rope);
             }
 
             final Object result = invoke(regexInterop, tRegex, execMethod, interopByteArray, fromIndex);

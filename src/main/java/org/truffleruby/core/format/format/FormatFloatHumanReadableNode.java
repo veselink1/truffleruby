@@ -14,6 +14,7 @@ import org.truffleruby.core.format.FormatNode;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.RopeOperations;
 
 @NodeChild("value")
@@ -21,14 +22,14 @@ public abstract class FormatFloatHumanReadableNode extends FormatNode {
 
     @TruffleBoundary
     @Specialization(guards = "isIntegerValue(value)")
-    protected byte[] formatInteger(double value) {
-        return RopeOperations.encodeAsciiBytes(String.valueOf((long) value));
+    protected Bytes formatInteger(double value) {
+        return new Bytes(RopeOperations.encodeAsciiBytes(String.valueOf((long) value)));
     }
 
     @TruffleBoundary
     @Specialization(guards = "!isIntegerValue(value)")
-    protected byte[] format(double value) {
-        return RopeOperations.encodeAsciiBytes(String.valueOf(value));
+    protected Bytes format(double value) {
+        return new Bytes(RopeOperations.encodeAsciiBytes(String.valueOf(value)));
     }
 
     protected boolean isIntegerValue(double value) {

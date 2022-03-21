@@ -41,6 +41,7 @@ import static org.truffleruby.core.rope.CodeRange.CR_UNKNOWN;
 import java.nio.charset.StandardCharsets;
 
 import org.jcodings.Encoding;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeOperations;
 import org.truffleruby.parser.RubySource;
@@ -119,9 +120,9 @@ public class LexerSource {
     private int nextNewLine() {
         int n = byteOffset;
 
-        final byte[] bytes = sourceBytes.getBytes();
+        final Bytes bytes = sourceBytes.getBytes();
         while (n < bytes.length) {
-            if (bytes[n] == '\n') {
+            if (bytes.get(n) == '\n') {
                 return n;
             }
 

@@ -71,10 +71,10 @@ public class SubstringRope extends ManagedRope {
     }
 
     @Override
-    protected byte[] getBytesSlow() {
+    protected Bytes getBytesSlow() {
         if (child.getRawBytes() != null) {
-            final byte[] bytes = new byte[byteLength()];
-            System.arraycopy(child.getRawBytes(), byteOffset, bytes, 0, byteLength());
+            final Bytes bytes = new Bytes(byteLength());
+            Bytes.copy(child.getRawBytes(), byteOffset, bytes, 0, byteLength());
             return bytes;
         }
 

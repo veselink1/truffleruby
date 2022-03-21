@@ -72,7 +72,7 @@ public class RopeCache {
     }
 
     @TruffleBoundary
-    public LeafRope getRope(byte[] bytes, Encoding encoding, CodeRange codeRange) {
+    public LeafRope getRope(Bytes bytes, Encoding encoding, CodeRange codeRange) {
         assert encoding != null;
 
         final BytesKey key = new BytesKey(bytes, encoding);
@@ -86,9 +86,9 @@ public class RopeCache {
         }
 
         // At this point, we were unable to find a rope with the same bytes and encoding (i.e., a direct match).
-        // However, there may still be a rope with the same byte[] and sharing a direct byte[] can still allow some
+        // However, there may still be a rope with the same Bytes and sharing a direct Bytes can still allow some
         // reference equality optimizations. So, do another search but with a marker encoding. The only guarantee
-        // we can make about the resulting rope is that it would have the same logical byte[], but that's good enough
+        // we can make about the resulting rope is that it would have the same logical Bytes, but that's good enough
         // for our purposes.
         final Rope ropeWithSameBytesButDifferentEncoding = bytesToRope.get(new BytesKey(bytes, null));
 

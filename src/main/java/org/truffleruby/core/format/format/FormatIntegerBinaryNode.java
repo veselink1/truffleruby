@@ -15,6 +15,7 @@ import com.oracle.truffle.api.dsl.Specialization;
 import org.truffleruby.core.format.FormatNode;
 import org.truffleruby.core.format.printf.PrintfSimpleTreeBuilder;
 import org.truffleruby.core.numeric.RubyBignum;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.RopeOperations;
 
 import java.math.BigInteger;
@@ -47,7 +48,7 @@ public abstract class FormatIntegerBinaryNode extends FormatNode {
     }
 
     @Specialization
-    protected byte[] format(int width, int precision, int value) {
+    protected Bytes format(int width, int precision, int value) {
         final boolean isNegative = value < 0;
         final boolean negativeAndPadded = isNegative && (this.hasSpaceFlag || this.hasPlusFlag);
         final String formatted = negativeAndPadded ? Integer.toBinaryString(-value) : Integer.toBinaryString(value);
@@ -65,7 +66,7 @@ public abstract class FormatIntegerBinaryNode extends FormatNode {
     }
 
     @Specialization
-    protected byte[] format(int width, int precision, long value) {
+    protected Bytes format(int width, int precision, long value) {
         final boolean isNegative = value < 0;
         final boolean negativeAndPadded = isNegative && (this.hasSpaceFlag || this.hasPlusFlag);
         final String formatted = negativeAndPadded ? Long.toBinaryString(-value) : Long.toBinaryString(value);
@@ -84,7 +85,7 @@ public abstract class FormatIntegerBinaryNode extends FormatNode {
 
     @TruffleBoundary
     @Specialization
-    protected byte[] format(int width, int precision, RubyBignum value) {
+    protected Bytes format(int width, int precision, RubyBignum value) {
         final BigInteger bigInteger = value.value;
         final boolean isNegative = bigInteger.signum() == -1;
         final boolean negativeAndPadded = isNegative && (this.hasSpaceFlag || this.hasPlusFlag);
@@ -116,7 +117,7 @@ public abstract class FormatIntegerBinaryNode extends FormatNode {
     }
 
     @TruffleBoundary
-    private static byte[] getFormattedString(String formatted, int width, int precision, boolean isNegative,
+    private static Bytes getFormattedString(String formatted, int width, int precision, boolean isNegative,
             boolean isSpacePadded, boolean hasPlusFlag, boolean hasZeroFlag,
             boolean useAlternativeFormat, boolean hasMinusFlag,
             char format) {
@@ -180,7 +181,7 @@ public abstract class FormatIntegerBinaryNode extends FormatNode {
             }
         }
 
-        return RopeOperations.encodeAsciiBytes(formatted);
+        return new Bytes(RopeOperations.encodeAsciiBytes(formatted));
     }
 
 }

@@ -17,7 +17,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 
 public class InvalidLeafRope extends LeafRope {
 
-    public InvalidLeafRope(byte[] bytes, Encoding encoding, int characterLength) {
+    public InvalidLeafRope(Bytes bytes, Encoding encoding, int characterLength) {
         super(bytes, encoding, CodeRange.CR_BROKEN, characterLength);
 
         assert RopeOperations.isInvalid(bytes, encoding) : "valid string incorrectly marked as CR_BROKEN";

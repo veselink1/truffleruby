@@ -16,6 +16,7 @@ import org.truffleruby.builtins.CoreMethodArrayArgumentsNode;
 import org.truffleruby.builtins.CoreModule;
 import org.truffleruby.builtins.UnaryCoreMethodNode;
 import org.truffleruby.core.klass.RubyClass;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeConstants;
 import org.truffleruby.core.rope.RopeGuards;
@@ -44,7 +45,7 @@ public abstract class ByteArrayNodes {
         @Specialization
         protected RubyByteArray allocate(RubyClass rubyClass) {
             final Shape shape = getLanguage().byteArrayShape;
-            final RubyByteArray instance = new RubyByteArray(rubyClass, shape, RopeConstants.EMPTY_BYTES);
+            final RubyByteArray instance = new RubyByteArray(rubyClass, shape, RopeConstants.EMPTY_BYTES.toArray());
             AllocationTracing.trace(instance, this);
             return instance;
         }
@@ -126,7 +127,8 @@ public abstract class ByteArrayNodes {
             final Rope rope = source.rope;
             final byte[] bytes = byteArray.bytes;
 
-            System.arraycopy(bytesNode.execute(rope), srcStart, bytes, dstStart, length);
+            final Bytes sourceBytes = bytesNode.execute(rope);
+            System.arraycopy(sourceBytes.array, sourceBytes.offset + srcStart, bytes, dstStart, length);
             return source;
         }
 
@@ -160,7 +162,7 @@ public abstract class ByteArrayNodes {
 
             final byte[] bytes = byteArray.bytes;
             final Rope rope = libPattern.getRope(pattern);
-            final byte searchByte = bytesNode.execute(rope)[0];
+            final byte searchByte = bytesNode.execute(rope).get(0);
 
             if (start >= length) {
                 tooLargeStartProfile.enter();
@@ -202,7 +204,7 @@ public abstract class ByteArrayNodes {
             return RopeGuards.isSingleByteString(rope);
         }
 
-        public int indexOf(byte[] in, int start, int length, byte[] target) {
+        public int indexOf(byte[] in, int start, int length, Bytes target) {
             int targetCount = target.length;
             int fromIndex = start;
             if (fromIndex >= length) {
@@ -215,7 +217,7 @@ public abstract class ByteArrayNodes {
                 return fromIndex;
             }
 
-            byte first = target[0];
+            byte first = target.get(0);
             int max = length - targetCount;
 
             for (int i = fromIndex; i <= max; i++) {
@@ -227,7 +229,7 @@ public abstract class ByteArrayNodes {
                 if (i <= max) {
                     int j = i + 1;
                     int end = j + targetCount - 1;
-                    for (int k = 1; j < end && in[j] == target[k]; j++, k++) {
+                    for (int k = 1; j < end && in[j] == target.get(k); j++, k++) {
                     }
 
                     if (j == end) {

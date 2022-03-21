@@ -33,6 +33,7 @@ import org.truffleruby.RubyContext;
 import org.truffleruby.RubyLanguage;
 import org.truffleruby.core.array.ArrayUtils;
 import org.truffleruby.core.klass.RubyClass;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeOperations;
 import org.truffleruby.core.string.EncodingUtils;
@@ -80,7 +81,7 @@ public class EncodingManager {
                 continue;
             }
             final RubyEncoding rubyEncoding = defineBuiltInEncoding(e.value);
-            for (String constName : EncodingUtils.encodingNames(e.bytes, e.p, e.end)) {
+            for (String constName : EncodingUtils.encodingNames(new Bytes(e.bytes), e.p, e.end)) {
                 encodingClass.fields.setConstant(context, null, constName, rubyEncoding);
             }
         }
@@ -97,10 +98,12 @@ public class EncodingManager {
 
             // The alias name should be exactly the one in the encodings DB.
             final Encoding encoding = encodingEntry.getEncoding();
-            final RubyEncoding rubyEncoding = defineAlias(encoding, RopeOperations.decodeAscii(e.bytes, e.p, e.end));
+            final RubyEncoding rubyEncoding = defineAlias(
+                    encoding,
+                    RopeOperations.decodeAscii(new Bytes(e.bytes), e.p, e.end));
 
             // The constant names must be treated by the the <code>encodingNames</code> helper.
-            for (String constName : EncodingUtils.encodingNames(e.bytes, e.p, e.end)) {
+            for (String constName : EncodingUtils.encodingNames(new Bytes(e.bytes), e.p, e.end)) {
                 encodingClass.fields.setConstant(context, null, constName, rubyEncoding);
             }
         }
@@ -165,7 +168,7 @@ public class EncodingManager {
                     context,
                     InteropLibrary.getUncached(),
                     0);
-            localeEncodingName = RopeOperations.decodeAscii(bytes);
+            localeEncodingName = RopeOperations.decodeAscii(new Bytes(bytes));
         } else {
             localeEncodingName = Charset.defaultCharset().name();
         }
@@ -198,10 +201,10 @@ public class EncodingManager {
 
     @TruffleBoundary
     public static Encoding getEncoding(Rope name) {
-        EncodingDB.Entry entry = EncodingDB.getEncodings().get(name.getBytes());
+        EncodingDB.Entry entry = EncodingDB.getEncodings().get(name.getBytes().toArray());
 
         if (entry == null) {
-            entry = EncodingDB.getAliases().get(name.getBytes());
+            entry = EncodingDB.getAliases().get(name.getBytes().toArray());
         }
 
         if (entry != null) {

@@ -52,8 +52,13 @@ public class RopeOperations {
 
     @TruffleBoundary
     public static LeafRope create(byte[] bytes, Encoding encoding, CodeRange codeRange) {
+        return create(new Bytes(bytes), encoding, codeRange);
+    }
+
+    @TruffleBoundary
+    public static LeafRope create(Bytes bytes, Encoding encoding, CodeRange codeRange) {
         if (bytes.length == 1) {
-            final int index = bytes[0] & 0xff;
+            final int index = bytes.get(0) & 0xff;
 
             if (encoding == UTF8Encoding.INSTANCE) {
                 return RopeConstants.UTF8_SINGLE_BYTE_ROPES[index];
@@ -108,7 +113,7 @@ public class RopeOperations {
             return RopeConstants.ASCII_8BIT_SINGLE_BYTE_ROPES[index];
         }
 
-        return create(new byte[]{ b }, encoding, codeRange);
+        return create(Bytes.of(b), encoding, codeRange);
     }
 
     public static Rope emptyRope(Encoding encoding) {
@@ -153,15 +158,15 @@ public class RopeOperations {
         return bytes;
     }
 
-    public static String decodeAscii(byte[] bytes) {
+    public static String decodeAscii(Bytes bytes) {
         return decodeAscii(bytes, 0, bytes.length);
     }
 
-    public static String decodeAscii(byte[] bytes, int byteOffset, int byteLength) {
+    public static String decodeAscii(Bytes bytes, int byteOffset, int byteLength) {
         final char[] buffer = new char[byteLength];
 
         for (int i = 0; i < byteLength; i++) {
-            byte b = bytes[byteOffset + i];
+            byte b = bytes.get(byteOffset + i);
             assert b >= 0;
             buffer[i] = (char) b;
         }
@@ -175,13 +180,13 @@ public class RopeOperations {
     }
 
     @TruffleBoundary
-    public static String decodeNonAscii(Encoding encoding, byte[] bytes, int byteOffset, int byteLength) {
+    public static String decodeNonAscii(Encoding encoding, Bytes bytes, int byteOffset, int byteLength) {
         final Charset charset;
 
         if (encoding == ASCIIEncoding.INSTANCE) {
             for (int i = 0; i < byteLength; i++) {
-                if (bytes[byteOffset + i] < 0) {
-                    throw new CannotConvertBinaryRubyStringToJavaString(bytes[byteOffset + i] & 0xFF);
+                if (bytes.get(byteOffset + i) < 0) {
+                    throw new CannotConvertBinaryRubyStringToJavaString(bytes.get(byteOffset + i) & 0xFF);
                 }
             }
 
@@ -201,7 +206,7 @@ public class RopeOperations {
 
     /** Overload to avoid calling getBytes() and mutate the Rope "bytes" field. */
     @TruffleBoundary
-    public static String decodeOrEscapeBinaryRope(Rope rope, byte[] bytes) {
+    public static String decodeOrEscapeBinaryRope(Rope rope, Bytes bytes) {
         if (rope.isAsciiOnly() || rope.getEncoding() != ASCIIEncoding.INSTANCE) {
             return decodeRopeSegment(rope, bytes, 0, bytes.length);
         } else {
@@ -209,13 +214,14 @@ public class RopeOperations {
         }
     }
 
-    private static String escapeBinaryRope(byte[] bytes) {
+    private static String escapeBinaryRope(Bytes bytes) {
         // A Rope with BINARY encoding cannot be converted faithfully to a Java String.
         // (ISO_8859_1 would just show random characters for bytes above 128)
         // Therefore we convert non-US-ASCII characters to "\xNN".
         // MRI Symbol#inspect for binary symbols is similar: "\xff".b.to_sym => :"\xFF"
         final StringBuilder builder = new StringBuilder(bytes.length);
-        for (final byte c : bytes) {
+        for (int i = bytes.offset; i < bytes.end(); i++) {
+            final byte c = bytes.array[i];
             if (c >= 0) { // US-ASCII character
                 builder.append((char) (c & 0xFF));
             } else {
@@ -234,7 +240,7 @@ public class RopeOperations {
         return decodeRopeSegment(value, value.getBytes(), byteOffset, byteLength);
     }
 
-    private static String decodeRopeSegment(Rope value, byte[] bytes, int byteOffset, int byteLength) {
+    private static String decodeRopeSegment(Rope value, Bytes bytes, int byteOffset, int byteLength) {
         if (value.isAsciiOnly()) {
             return decodeAscii(bytes, byteOffset, byteLength);
         } else {
@@ -244,7 +250,7 @@ public class RopeOperations {
 
     /** This method has no side effects, because it does not even have access to the Rope - for debugging only. */
     @TruffleBoundary
-    public static String decode(Encoding encoding, byte[] bytes) {
+    public static String decode(Encoding encoding, Bytes bytes) {
         if (encoding == ASCIIEncoding.INSTANCE) {
             return escapeBinaryRope(bytes);
         } else {
@@ -253,12 +259,12 @@ public class RopeOperations {
         }
     }
 
-    private static String decode(Charset charset, byte[] bytes, int byteOffset, int byteLength) {
-        return new String(bytes, byteOffset, byteLength, charset);
+    private static String decode(Charset charset, Bytes bytes, int byteOffset, int byteLength) {
+        return new String(bytes.array, bytes.offset + byteOffset, byteLength, charset);
     }
 
     @TruffleBoundary
-    public static StringAttributes calculateCodeRangeAndLength(Encoding encoding, byte[] bytes, int start, int end) {
+    public static StringAttributes calculateCodeRangeAndLength(Encoding encoding, Bytes bytes, int start, int end) {
         if (bytes.length == 0) {
             return new StringAttributes(0, encoding.isAsciiCompatible() ? CR_7BIT : CR_VALID);
         } else if (encoding == ASCIIEncoding.INSTANCE) {
@@ -271,15 +277,15 @@ public class RopeOperations {
     }
 
     @TruffleBoundary
-    public static int strLength(Encoding enc, byte[] bytes, int p, int end) {
+    public static int strLength(Encoding enc, Bytes bytes, int p, int end) {
         return StringSupport.strLength(enc, bytes, p, end);
     }
 
-    private static StringAttributes strLengthWithCodeRangeBinaryString(byte[] bytes, int start, int end) {
+    private static StringAttributes strLengthWithCodeRangeBinaryString(Bytes bytes, int start, int end) {
         CodeRange codeRange = CR_7BIT;
 
         for (int i = start; i < end; i++) {
-            if (bytes[i] < 0) {
+            if (bytes.get(i) < 0) {
                 codeRange = CR_VALID;
                 break;
             }
@@ -291,16 +297,16 @@ public class RopeOperations {
     /** This method should not be used directly, because it does not cache the result in the Rope. Use
      * {@link RopeNodes.BytesNode} or {@link Rope#getBytes()} instead.
      *
-     * Performs an iterative depth first search of the Rope tree to calculate its byte[] without needing to populate the
-     * byte[] for each level beneath. Every LeafRope has its byte[] populated by definition. The goal is to determine
-     * which descendant LeafRopes contribute bytes to the top-most Rope's logical byte[] and how many bytes they should
-     * contribute. Then each such LeafRope copies the appropriate range of bytes to a shared byte[].
+     * Performs an iterative depth first search of the Rope tree to calculate its Bytes without needing to populate the
+     * Bytes for each level beneath. Every LeafRope has its Bytes populated by definition. The goal is to determine
+     * which descendant LeafRopes contribute bytes to the top-most Rope's logical Bytes and how many bytes they should
+     * contribute. Then each such LeafRope copies the appropriate range of bytes to a shared Bytes.
      *
      * Rope trees can be very deep. An iterative algorithm is preferable to recursion because it removes the overhead of
      * stack frame management. Additionally, a recursive algorithm will eventually overflow the stack if the Rope tree
      * is too deep. */
     @TruffleBoundary
-    public static byte[] flattenBytes(Rope rope) {
+    public static Bytes flattenBytes(Rope rope) {
         if (rope.getRawBytes() != null) {
             return rope.getRawBytes();
         }
@@ -312,13 +318,13 @@ public class RopeOperations {
         int bufferPosition = 0;
         int byteOffset = 0;
 
-        final byte[] buffer = new byte[rope.byteLength()];
+        final Bytes buffer = new Bytes(rope.byteLength());
 
         // As we traverse the rope tree, we need to keep track of any bounded lengths of SubstringRopes. LeafRopes always
-        // provide their full byte[]. ConcatRope always provides the full byte[] of each of its children. SubstringRopes,
+        // provide their full Bytes. ConcatRope always provides the full Bytes of each of its children. SubstringRopes,
         // in contrast, may bound the length of their children. Since we may have SubstringRopes of SubstringRopes, we
         // need to track each SubstringRope's bounded length and how much that bounded length contributes to the total
-        // byte[] for any ancestor (e.g., a SubstringRope of a ConcatRope with SubstringRopes for each of its children).
+        // Bytes for any ancestor (e.g., a SubstringRope of a ConcatRope with SubstringRopes for each of its children).
         // Because we need to track multiple levels, we can't use a single updated int.
         final IntStack substringLengths = new IntStack();
 
@@ -333,7 +339,7 @@ public class RopeOperations {
                 continue;
             }
 
-            final byte[] rawBytes;
+            final Bytes rawBytes;
             if (current instanceof LazyIntRope) {
                 rawBytes = current.getBytesSlow();
             } else {
@@ -343,14 +349,14 @@ public class RopeOperations {
             if (rawBytes != null) {
                 // In the absence of any SubstringRopes, we always take the full contents of the current rope.
                 if (substringLengths.isEmpty()) {
-                    System.arraycopy(rawBytes, byteOffset, buffer, bufferPosition, current.byteLength());
+                    Bytes.copy(rawBytes, byteOffset, buffer, bufferPosition, current.byteLength());
                     bufferPosition += current.byteLength();
                 } else {
                     int bytesToCopy = substringLengths.pop();
                     final int currentBytesToCopy;
 
                     // If we reach here, this rope is a descendant of a SubstringRope at some level. Based on
-                    // the currently calculated byte[] offset and the number of bytes to extract, determine how many
+                    // the currently calculated Bytes offset and the number of bytes to extract, determine how many
                     // bytes we can copy to the buffer.
                     if (bytesToCopy > (current.byteLength() - byteOffset)) {
                         currentBytesToCopy = current.byteLength() - byteOffset;
@@ -358,7 +364,7 @@ public class RopeOperations {
                         currentBytesToCopy = bytesToCopy;
                     }
 
-                    System.arraycopy(rawBytes, byteOffset, buffer, bufferPosition, currentBytesToCopy);
+                    Bytes.copy(rawBytes, byteOffset, buffer, bufferPosition, currentBytesToCopy);
                     bufferPosition += currentBytesToCopy;
                     bytesToCopy -= currentBytesToCopy;
 
@@ -400,7 +406,7 @@ public class RopeOperations {
                     final int leftLength = state.left.byteLength();
 
                     // If we reach here, this ConcatRope is a descendant of a SubstringRope at some level. Based on
-                    // the currently calculated byte[] offset and the number of bytes to extract, determine which of
+                    // the currently calculated Bytes offset and the number of bytes to extract, determine which of
                     // the ConcatRope's children we need to visit.
                     if (byteOffset < leftLength) {
                         if ((byteOffset + substringLengths.peek()) > leftLength) {
@@ -456,7 +462,7 @@ public class RopeOperations {
                 }
 
                 // If this SubstringRope is a descendant of another SubstringRope, we need to increment the offset
-                // so that when we finally reach a rope with its byte[] filled, we're extracting bytes from the correct
+                // so that when we finally reach a rope with its Bytes filled, we're extracting bytes from the correct
                 // location.
                 byteOffset += substringRope.getByteOffset();
             } else if (current instanceof RepeatingRope) {
@@ -508,15 +514,15 @@ public class RopeOperations {
     @TruffleBoundary
     static byte getByteSlow(Rope rope, int index) {
         while (true) {
-            final byte[] rawBytes = rope.getRawBytes();
+            final Bytes rawBytes = rope.getRawBytes();
             if (rawBytes != null) {
-                return rawBytes[index];
+                return rawBytes.get(index);
             } else if (rope instanceof ConcatRope) {
                 final ConcatRope concatRope = (ConcatRope) rope;
                 final ConcatState state = concatRope.getState();
                 if (state.isFlattened()) {
                     // Rope got concurrently flattened.
-                    return state.bytes[index];
+                    return state.bytes.get(index);
                 }
                 if (index < state.left.byteLength()) {
                     rope = state.left;
@@ -574,10 +580,10 @@ public class RopeOperations {
             startingHashCode = params.readResult ? resultHash : params.startingHashCode;
             offset = params.offset;
             length = params.length;
-            final byte[] bytes = rope.getRawBytes();
+            final Bytes bytes = rope.getRawBytes();
 
             if (bytes != null) {
-                resultHash = Hashing.stringHash(bytes, startingHashCode, offset, length);
+                resultHash = Hashing.stringHash(bytes.array, startingHashCode, bytes.offset + offset, length);
             } else if (rope instanceof SubstringRope) {
                 final SubstringRope substringRope = (SubstringRope) rope;
                 final Rope child = substringRope.getChild();
@@ -588,7 +594,8 @@ public class RopeOperations {
                 final ConcatState state = concatRope.getState();
                 if (state.isFlattened()) {
                     // Rope got concurrently flattened.
-                    resultHash = Hashing.stringHash(state.bytes, startingHashCode, offset, length);
+                    resultHash = Hashing
+                            .stringHash(state.bytes.array, startingHashCode, state.bytes.offset + offset, length);
                 } else {
                     final Rope left = state.left;
                     final Rope right = state.right;
@@ -622,7 +629,8 @@ public class RopeOperations {
                 // one iteration
                 workStack.push(new Params(child, startingHashCode, offset, length, false));
             } else {
-                resultHash = Hashing.stringHash(rope.getBytes(), startingHashCode, offset, length);
+                resultHash = Hashing
+                        .stringHash(rope.getBytes().array, startingHashCode, rope.getBytes().offset + offset, length);
             }
         }
 
@@ -643,11 +651,11 @@ public class RopeOperations {
 
         final int size = value.byteLength();
         final int len = Math.min(size, other.byteLength());
-        final byte[] other_bytes = other.getBytes();
+        final Bytes other_bytes = other.getBytes();
 
         for (int offset = -1; ++offset < len;) {
-            int myCharIgnoreCase = AsciiTables.ToLowerCaseTable[value.getBytes()[offset] & 0xff] & 0xff;
-            int otherCharIgnoreCase = AsciiTables.ToLowerCaseTable[other_bytes[offset] & 0xff] & 0xff;
+            int myCharIgnoreCase = AsciiTables.ToLowerCaseTable[value.getBytes().get(offset) & 0xff] & 0xff;
+            int otherCharIgnoreCase = AsciiTables.ToLowerCaseTable[other_bytes.get(offset) & 0xff] & 0xff;
             if (myCharIgnoreCase < otherCharIgnoreCase) {
                 return -1;
             } else if (myCharIgnoreCase > otherCharIgnoreCase) {
@@ -662,13 +670,13 @@ public class RopeOperations {
         return create(builder.getBytes(), builder.getEncoding(), CR_UNKNOWN);
     }
 
-    public static boolean isAsciiOnly(byte[] bytes, Encoding encoding) {
+    public static boolean isAsciiOnly(Bytes bytes, Encoding encoding) {
         if (!encoding.isAsciiCompatible()) {
             return false;
         }
 
         for (int i = 0; i < bytes.length; i++) {
-            if (bytes[i] < 0) {
+            if (bytes.get(i) < 0) {
                 return false;
             }
         }
@@ -676,7 +684,7 @@ public class RopeOperations {
         return true;
     }
 
-    public static boolean isInvalid(byte[] bytes, Encoding encoding) {
+    public static boolean isInvalid(Bytes bytes, Encoding encoding) {
         final StringAttributes attributes = calculateCodeRangeAndLength(encoding, bytes, 0, bytes.length);
 
         return attributes.getCodeRange() == CR_BROKEN;

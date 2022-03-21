@@ -13,6 +13,7 @@ import org.jcodings.specific.ASCIIEncoding;
 import org.truffleruby.RubyContext;
 import org.truffleruby.RubyLanguage;
 import org.truffleruby.core.encoding.Encodings;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.Rope;
 
@@ -39,7 +40,7 @@ public class CoreString {
             CompilerDirectives.transferToInterpreterAndInvalidate();
 
             rope = language.ropeCache.getRope(
-                    RopeOperations.encodeAsciiBytes(literal),
+                    new Bytes(RopeOperations.encodeAsciiBytes(literal)),
                     // Binary because error message Strings have a ASCII-8BIT encoding on MRI.
                     // When used for creating a Symbol, the encoding is adapted as needed.
                     ASCIIEncoding.INSTANCE,

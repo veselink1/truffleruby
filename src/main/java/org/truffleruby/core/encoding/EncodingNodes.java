@@ -34,6 +34,7 @@ import org.truffleruby.core.encoding.EncodingNodesFactory.NegotiateCompatibleRop
 import org.truffleruby.core.klass.RubyClass;
 import org.truffleruby.core.proc.RubyProc;
 import org.truffleruby.core.regexp.RubyRegexp;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeNodes;
@@ -431,7 +432,7 @@ public abstract class EncodingNodes {
             for (Hash.HashEntry<EncodingDB.Entry> entry : EncodingDB.getAliases().entryIterator()) {
                 final CaseInsensitiveBytesHash.CaseInsensitiveBytesHashEntry<EncodingDB.Entry> e = (CaseInsensitiveBytesHash.CaseInsensitiveBytesHashEntry<EncodingDB.Entry>) entry;
                 final RubyString aliasName = makeStringNode.executeMake(
-                        ArrayUtils.extractRange(e.bytes, e.p, e.end),
+                        new Bytes(ArrayUtils.extractRange(e.bytes, e.p, e.end)),
                         Encodings.US_ASCII,
                         CodeRange.CR_7BIT);
                 yieldNode.yield(

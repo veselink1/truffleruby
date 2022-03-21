@@ -72,7 +72,7 @@ public abstract class TruffleRopesNodes {
         protected Object debugPrint(Object string, boolean printString,
                 @CachedLibrary(limit = "2") RubyStringLibrary strings) {
             System.err.println("Legend: ");
-            System.err.println("BN = Bytes Null? (byte[] not yet populated)");
+            System.err.println("BN = Bytes Null? (Bytes not yet populated)");
             System.err.println("BL = Byte Length");
             System.err.println("CL = Character Length");
             System.err.println("CR = Code Range");
@@ -100,7 +100,7 @@ public abstract class TruffleRopesNodes {
                 @CachedLibrary(limit = "2") RubyStringLibrary strings) {
             Rope rope = strings.getRope(string);
             String result = getStructure(rope);
-            byte[] bytes = StringOperations.encodeBytes(result, UTF8Encoding.INSTANCE);
+            Bytes bytes = StringOperations.encodeBytes(result, UTF8Encoding.INSTANCE);
             return makeStringNode.executeMake(
                     bytes,
                     strings.getEncoding(string),
@@ -195,7 +195,9 @@ public abstract class TruffleRopesNodes {
                 @Cached StringNodes.MakeStringNode makeStringNode) {
             return makeStringNode
                     .fromRope(
-                            new AsciiOnlyLeafRope(new byte[]{ 't', 'e', 's', 't' }, UTF8Encoding.INSTANCE),
+                            new AsciiOnlyLeafRope(
+                                    Bytes.of((byte) 't', (byte) 'e', (byte) 's', (byte) 't'),
+                                    UTF8Encoding.INSTANCE),
                             Encodings.UTF_8);
         }
 

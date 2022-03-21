@@ -10,6 +10,7 @@
 package org.truffleruby.core.format.write.bytes;
 
 import org.truffleruby.core.format.FormatNode;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeNodes;
 
@@ -28,9 +29,15 @@ public abstract class WriteBytesNode extends FormatNode {
     }
 
     @Specialization
+    protected Object writeBytesObject(VirtualFrame frame, Bytes bytes) {
+        writeBytes(frame, bytes);
+        return null;
+    }
+
+    @Specialization
     protected Object writeRope(VirtualFrame frame, Rope rope,
             @Cached RopeNodes.BytesNode bytesNode) {
-        writeBytes(frame, bytesNode.execute(rope));
+        writeBytes(frame, bytesNode.execute(rope).toArray());
         return null;
     }
 

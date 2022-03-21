@@ -28,6 +28,7 @@ import org.truffleruby.builtins.CoreModule;
 import org.truffleruby.collections.Memo;
 import org.truffleruby.core.array.RubyArray;
 import org.truffleruby.core.encoding.Encodings;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.RopeOperations;
 import org.truffleruby.core.rope.Rope;
@@ -465,7 +466,7 @@ public abstract class TruffleBootNodes {
                 throw CompilerDirectives.shouldNotReachHere(e);
             }
 
-            String basicVersion = RopeOperations.decodeAscii(bytes).trim();
+            String basicVersion = RopeOperations.decodeAscii(new Bytes(bytes)).trim();
             return makeStringNode.executeMake(basicVersion, Encodings.UTF_8, CodeRange.CR_7BIT);
         }
 

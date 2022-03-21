@@ -18,6 +18,7 @@ import com.oracle.truffle.api.TruffleSafepoint;
 import com.oracle.truffle.api.nodes.Node;
 import com.oracle.truffle.api.profiles.LoopConditionProfile;
 import org.truffleruby.RubyLanguage;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.language.RubyBaseNode;
 
 public abstract class ArrayUtils {
@@ -252,6 +253,10 @@ public abstract class ArrayUtils {
     public static boolean regionEquals(byte[] first, int firstStart, byte[] second, int secondStart, int size) {
         return com.oracle.truffle.api.ArrayUtils
                 .regionEqualsWithOrMask(first, firstStart, second, secondStart, size, null);
+    }
+
+    public static boolean regionEquals(Bytes first, int firstStart, Bytes second, int secondStart, int size) {
+        return regionEquals(first.array, first.offset + firstStart, second.array, second.offset + secondStart, size);
     }
 
     public static int memcmp(byte[] first, int firstStart, byte[] second, int secondStart, int size, Node node,

@@ -34,6 +34,7 @@ import org.truffleruby.core.cast.ToIntNode;
 import org.truffleruby.core.klass.RubyClass;
 import org.truffleruby.core.range.RubyIntRange;
 import org.truffleruby.core.regexp.MatchDataNodesFactory.ValuesNodeFactory;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeNodes;
 import org.truffleruby.core.rope.RopeOperations;
@@ -149,7 +150,7 @@ public abstract class MatchDataNodes {
         // Taken from org.jruby.RubyMatchData
         Arrays.sort(pairs);
 
-        byte[] bytes = source.getBytes();
+        Bytes bytes = source.getBytes();
         int p = 0;
         int s = p;
         int c = 0;
@@ -381,7 +382,7 @@ public abstract class MatchDataNodes {
                 for (Iterator<NameEntry> i = regex.namedBackrefIterator(); i.hasNext();) {
                     final NameEntry e = i.next();
 
-                    if (bytesEqual(rope.getBytes(), rope.byteLength(), e.name, e.nameP, e.nameEnd)) {
+                    if (bytesEqual(rope.getBytes(), rope.byteLength(), new Bytes(e.name), e.nameP, e.nameEnd)) {
                         return e;
                     }
                 }
@@ -410,9 +411,9 @@ public abstract class MatchDataNodes {
         private int nameToBackrefNumber(RubyMatchData matchData, RubyRegexp regexp, Rope name) {
             try {
                 return regexp.regex.nameToBackrefNumber(
-                        name.getBytes(),
-                        0,
-                        name.byteLength(),
+                        name.getBytes().array,
+                        name.getBytes().offset,
+                        name.getBytes().offset + name.byteLength(),
                         matchData.region);
             } catch (ValueException e) {
                 throw new RaiseException(
@@ -435,8 +436,8 @@ public abstract class MatchDataNodes {
         }
 
         @TruffleBoundary
-        private static boolean bytesEqual(byte[] bytes, int byteLength, byte[] name, int nameP, int nameEnd) {
-            if (bytes == name && nameP == 0 && byteLength == nameEnd) {
+        private static boolean bytesEqual(Bytes bytes, int byteLength, Bytes name, int nameP, int nameEnd) {
+            if (bytes.referenceAndRangeEquals(name) && nameP == 0 && byteLength == nameEnd) {
                 return true;
             } else if (nameEnd - nameP != byteLength) {
                 return false;

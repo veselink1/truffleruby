@@ -34,7 +34,9 @@ public class RBSprintfCompiler {
     }
 
     public RootCallTarget compile(Rope format, Object stringReader) {
-        final RBSprintfSimpleParser parser = new RBSprintfSimpleParser(bytesToChars(format.getBytes()), false);
+        final RBSprintfSimpleParser parser = new RBSprintfSimpleParser(
+                bytesToChars(format.getBytes().toArray()),
+                false);
         final List<RBSprintfConfig> configs = parser.parse();
         final RBSprintfSimpleTreeBuilder builder = new RBSprintfSimpleTreeBuilder(language, configs, stringReader);
 
@@ -48,7 +50,9 @@ public class RBSprintfCompiler {
     private static int SIGN = 0x10;
 
     public Object typeList(Rope format, RubyContext context, RubyLanguage language) {
-        final RBSprintfSimpleParser parser = new RBSprintfSimpleParser(bytesToChars(format.getBytes()), false);
+        final RBSprintfSimpleParser parser = new RBSprintfSimpleParser(
+                bytesToChars(format.getBytes().toArray()),
+                false);
         final List<RBSprintfConfig> configs = parser.parse();
         final int[] types = new int[3 * configs.size()]; // Ensure there is enough space for the argument types that might be in the format string.
 

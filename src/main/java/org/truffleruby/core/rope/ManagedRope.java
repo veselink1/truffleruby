@@ -22,7 +22,7 @@ public abstract class ManagedRope extends Rope {
             CodeRange codeRange,
             int byteLength,
             int characterLength,
-            byte[] bytes) {
+            Bytes bytes) {
         super(encoding, byteLength, bytes);
 
         this.codeRange = codeRange;
@@ -45,7 +45,7 @@ public abstract class ManagedRope extends Rope {
     }
 
     @Override
-    public final byte[] getBytes() {
+    public final Bytes getBytes() {
         CompilerAsserts.neverPartOfCompilation("Use RopeNodes.ByteNodes instead, or add a @TruffleBoundary.");
         if (bytes == null) {
             bytes = getBytesSlow();

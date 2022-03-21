@@ -111,7 +111,7 @@ public abstract class DigestNodes {
             final MessageDigest digest = digestObject.digest;
             final Rope rope = strings.getRope(message);
 
-            digest.update(rope.getBytes());
+            digest.update(rope.getBytes().array, rope.getBytes().offset, rope.getBytes().length);
             return digestObject;
         }
 
@@ -188,7 +188,10 @@ public abstract class DigestNodes {
         protected RubyString bubblebabble(Object message,
                 @CachedLibrary(limit = "2") RubyStringLibrary strings) {
             final Rope rope = strings.getRope(message);
-            final byte[] bubblebabbleBytes = bubblebabble(rope.getBytes(), 0, rope.byteLength()).getBytes();
+            final byte[] bubblebabbleBytes = bubblebabble(
+                    rope.getBytes().array,
+                    rope.getBytes().offset,
+                    rope.byteLength()).getBytesArray();
 
             return makeStringNode.executeMake(bubblebabbleBytes, Encodings.UTF_8, CodeRange.CR_7BIT);
         }

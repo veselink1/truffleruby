@@ -15,6 +15,7 @@ import org.jcodings.Encoding;
 import org.truffleruby.collections.WeakValueCache;
 import org.truffleruby.core.encoding.Encodings;
 import org.truffleruby.core.encoding.RubyEncoding;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.LeafRope;
 import org.truffleruby.core.rope.Rope;
@@ -44,7 +45,7 @@ public class FrozenStringLiterals {
     }
 
     @TruffleBoundary
-    public ImmutableRubyString getFrozenStringLiteral(byte[] bytes, Encoding encoding, CodeRange codeRange) {
+    public ImmutableRubyString getFrozenStringLiteral(Bytes bytes, Encoding encoding, CodeRange codeRange) {
         // Ensure all ImmutableRubyString have a Rope from the RopeCache
         final LeafRope cachedRope = ropeCache.getRope(bytes, encoding, codeRange);
 

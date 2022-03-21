@@ -76,6 +76,7 @@ import org.truffleruby.builtins.PrimitiveArrayArgumentsNode;
 import org.truffleruby.builtins.UnaryCoreMethodNode;
 import org.truffleruby.core.encoding.Encodings;
 import org.truffleruby.core.klass.RubyClass;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.string.StringNodes.MakeStringNode;
@@ -142,12 +143,12 @@ public abstract class IONodes {
             final Rope pathRope = stringsPath.getRope(path);
 
             return fnmatch(
-                    patternRope.getBytes(),
-                    0,
-                    patternRope.byteLength(),
-                    pathRope.getBytes(),
-                    0,
-                    pathRope.byteLength(),
+                    patternRope.getBytes().array,
+                    patternRope.getBytes().offset,
+                    patternRope.getBytes().offset + patternRope.byteLength(),
+                    pathRope.getBytes().array,
+                    pathRope.getBytes().offset,
+                    pathRope.getBytes().offset + pathRope.byteLength(),
                     flags) != FNM_NOMATCH;
         }
 
@@ -482,11 +483,11 @@ public abstract class IONodes {
             }
 
             final Rope rope = strings.getRope(string);
-            final byte[] bytes = rope.getBytes();
+            final Bytes bytes = rope.getBytes();
 
             getContext().getThreadManager().runUntilResult(this, () -> {
                 try {
-                    stream.write(bytes);
+                    stream.write(bytes.array, bytes.offset, bytes.length);
                 } catch (IOException e) {
                     throw new RaiseException(getContext(), coreExceptions().ioError(e, this));
                 }

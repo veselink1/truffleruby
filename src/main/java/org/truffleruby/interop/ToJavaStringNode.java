@@ -11,6 +11,7 @@ package org.truffleruby.interop;
 
 import com.oracle.truffle.api.dsl.Fallback;
 import com.oracle.truffle.api.library.CachedLibrary;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeNodes;
 import org.truffleruby.core.rope.RopeOperations;
@@ -62,7 +63,7 @@ public abstract class ToJavaStringNode extends RubySourceNode {
             @Cached RopeNodes.AsciiOnlyNode asciiOnlyNode,
             @Cached RopeNodes.BytesNode bytesNode) {
         final Rope rope = strings.getRope(value);
-        final byte[] bytes = bytesNode.execute(rope);
+        final Bytes bytes = bytesNode.execute(rope);
 
         if (asciiOnlyProfile.profile(asciiOnlyNode.execute(rope))) {
             return RopeOperations.decodeAscii(bytes);

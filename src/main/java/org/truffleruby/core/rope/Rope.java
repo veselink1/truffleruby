@@ -10,7 +10,6 @@
 package org.truffleruby.core.rope;
 
 import java.lang.management.ManagementFactory;
-import java.util.Arrays;
 import java.util.List;
 
 import com.oracle.truffle.api.profiles.ConditionProfile;
@@ -26,9 +25,9 @@ public abstract class Rope implements Comparable<Rope> {
     public final Encoding encoding;
     private final int byteLength;
     private int hashCode = 0;
-    protected byte[] bytes;
+    protected Bytes bytes;
 
-    protected Rope(Encoding encoding, int byteLength, byte[] bytes) {
+    protected Rope(Encoding encoding, int byteLength, Bytes bytes) {
         assert encoding != null;
 
         this.encoding = encoding;
@@ -56,18 +55,18 @@ public abstract class Rope implements Comparable<Rope> {
 
     protected abstract byte getByteSlow(int index);
 
-    public final byte[] getRawBytes() {
+    public final Bytes getRawBytes() {
         return bytes;
     }
 
-    public abstract byte[] getBytes();
+    public abstract Bytes getBytes();
 
-    /** The caller of this method will cache the resulting byte[]. */
-    protected byte[] getBytesSlow() {
+    /** The caller of this method will cache the resulting Bytes. */
+    protected Bytes getBytesSlow() {
         return RopeOperations.flattenBytes(this);
     }
 
-    public final byte[] getBytesCopy() {
+    public final Bytes getBytesCopy() {
         return getBytes().clone();
     }
 
@@ -109,21 +108,21 @@ public abstract class Rope implements Comparable<Rope> {
          * force and compare the hash codes, and then flatten for a byte equality. Both the intermediate hash
          * generations of the nodes, and the final Array.equals if needed, should have good inner-loop
          * implementations. */
-        return this.hashCode() == other.hashCode() && Arrays.equals(this.getBytes(), other.getBytes());
+        return this.hashCode() == other.hashCode() && Bytes.equals(this.getBytes(), other.getBytes());
     }
 
     @Override
     @TruffleBoundary
     public int compareTo(Rope other) {
-        final byte[] selfBytes = getBytes();
-        final byte[] otherBytes = other.getBytes();
+        final Bytes selfBytes = getBytes();
+        final Bytes otherBytes = other.getBytes();
         final int selfLen = selfBytes.length;
         final int otherLen = otherBytes.length;
         final int compareLen = Math.min(selfLen, otherLen);
         int i = 0;
         while (i < compareLen) {
-            final byte selfByte = selfBytes[i];
-            final byte otherByte = otherBytes[i];
+            final byte selfByte = selfBytes.get(i);
+            final byte otherByte = otherBytes.get(i);
             if (selfByte != otherByte) {
                 return selfByte - otherByte;
             }
@@ -146,7 +145,7 @@ public abstract class Rope implements Comparable<Rope> {
             }
 
             return encoding == other.getEncoding() && byteLength() == other.byteLength() &&
-                    Arrays.equals(getBytes(), other.getBytes());
+                    Bytes.equals(getBytes(), other.getBytes());
         }
 
         return false;
@@ -154,7 +153,7 @@ public abstract class Rope implements Comparable<Rope> {
 
     public byte get(int index) {
         if (bytes != null) {
-            return bytes[index];
+            return bytes.get(index);
         }
 
         return getByteSlow(index);

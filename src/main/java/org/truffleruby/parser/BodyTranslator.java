@@ -54,6 +54,7 @@ import org.truffleruby.core.regexp.MatchDataNodes.GetIndexNode;
 import org.truffleruby.core.regexp.RegexWarnDeferredCallback;
 import org.truffleruby.core.regexp.RegexpOptions;
 import org.truffleruby.core.regexp.RubyRegexp;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.LeafRope;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeConstants;
@@ -510,7 +511,10 @@ public class BodyTranslator extends Translator {
             final StrParseNode strNode = (StrParseNode) receiver;
             final Rope nodeRope = strNode.getValue();
             final ImmutableRubyString frozenString = language
-                    .getFrozenStringLiteral(nodeRope.getBytes(), nodeRope.getEncoding(), strNode.getCodeRange());
+                    .getFrozenStringLiteral(
+                            nodeRope.getBytes().toArray(),
+                            nodeRope.getEncoding(),
+                            strNode.getCodeRange());
             return addNewlineIfNeeded(node, withSourceSection(
                     sourceSection,
                     new FrozenStringLiteralNode(frozenString, FrozenStrings.METHOD)));
@@ -2109,11 +2113,11 @@ public class BodyTranslator extends Translator {
 
         if (node.getReceiverNode() instanceof RegexpParseNode) {
             final RegexpParseNode regexpNode = (RegexpParseNode) node.getReceiverNode();
-            final byte[] bytes = regexpNode.getValue().getBytes();
+            final Bytes bytes = regexpNode.getValue().getBytes();
             final Regex regex;
             try {
                 regex = new Regex(
-                        bytes,
+                        bytes.toArray(),
                         0,
                         bytes.length,
                         regexpNode.getOptions().toOptions(),
@@ -2864,7 +2868,7 @@ public class BodyTranslator extends Translator {
 
         if (node.isFrozen()) {
             final ImmutableRubyString frozenString = language
-                    .getFrozenStringLiteral(nodeRope.getBytes(), nodeRope.getEncoding(), node.getCodeRange());
+                    .getFrozenStringLiteral(nodeRope.getBytes().toArray(), nodeRope.getEncoding(), node.getCodeRange());
             ret = new FrozenStringLiteralNode(frozenString, FrozenStrings.EXPRESSION);
         } else {
             final LeafRope cachedRope = language.ropeCache

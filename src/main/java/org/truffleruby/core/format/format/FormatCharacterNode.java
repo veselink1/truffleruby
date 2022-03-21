@@ -17,6 +17,7 @@ import org.truffleruby.core.format.convert.ToStringNode;
 import org.truffleruby.core.format.convert.ToStringNodeGen;
 import org.truffleruby.core.format.exceptions.NoImplicitConversionException;
 import org.truffleruby.core.format.write.bytes.WriteByteNodeGen;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeOperations;
 import org.truffleruby.core.string.StringUtils;
@@ -44,7 +45,7 @@ public abstract class FormatCharacterNode extends FormatNode {
     }
 
     @Specialization(guards = { "width == cachedWidth" }, limit = "getLimit()")
-    protected byte[] formatCached(VirtualFrame frame, int width, Object value,
+    protected Bytes formatCached(VirtualFrame frame, int width, Object value,
             @Cached("width") int cachedWidth,
             @Cached("makeFormatString(width)") String cachedFormatString) {
         final String charString = getCharString(frame, value);
@@ -52,7 +53,7 @@ public abstract class FormatCharacterNode extends FormatNode {
     }
 
     @Specialization(replaces = "formatCached")
-    protected byte[] format(VirtualFrame frame, int width, Object value) {
+    protected Bytes format(VirtualFrame frame, int width, Object value) {
         final String charString = getCharString(frame, value);
         return StringUtils.formatASCIIBytes(makeFormatString(width), charString);
     }

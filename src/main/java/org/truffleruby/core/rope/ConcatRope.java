@@ -24,9 +24,9 @@ public class ConcatRope extends ManagedRope {
     @ValueType
     public static class ConcatState {
         public final ManagedRope left, right;
-        public final byte[] bytes;
+        public final Bytes bytes;
 
-        public ConcatState(ManagedRope left, ManagedRope right, byte[] bytes) {
+        public ConcatState(ManagedRope left, ManagedRope right, Bytes bytes) {
             assert bytes == null && left != null && right != null || bytes != null && left == null && right == null;
             this.left = left;
             this.right = right;
@@ -63,7 +63,7 @@ public class ConcatRope extends ManagedRope {
             CodeRange codeRange,
             int byteLength,
             int characterLength,
-            byte[] bytes) {
+            Bytes bytes) {
         super(encoding, codeRange, byteLength, characterLength, bytes);
         assert left != null;
         assert right != null;
@@ -94,7 +94,7 @@ public class ConcatRope extends ManagedRope {
     }
 
     @Override
-    protected byte[] getBytesSlow() {
+    protected Bytes getBytesSlow() {
         flatten();
         return bytes;
     }
@@ -123,7 +123,7 @@ public class ConcatRope extends ManagedRope {
         final ManagedRope left = this.left;
         final ManagedRope right = this.right;
         MemoryFence.loadLoad();
-        final byte[] bytes = this.bytes;
+        final Bytes bytes = this.bytes;
         if (bytesNotNull.profile(bytes != null)) {
             return new ConcatState(null, null, bytes);
         } else if (left != null && right != null) {

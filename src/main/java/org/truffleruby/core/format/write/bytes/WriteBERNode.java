@@ -133,21 +133,21 @@ public abstract class WriteBERNode extends FormatNode {
         int right = buf.getLength() - 1;
 
         if (right >= 0) {
-            buf.getUnsafeBytes()[0] &= 0x7F;
+            buf.getUnsafeBytes().set(0, (byte) (buf.getUnsafeBytes().get(0) & 0x7F));
         } else {
             buf.append(0);
         }
 
         while (left < right) {
-            final byte tmp = buf.getUnsafeBytes()[left];
-            buf.getUnsafeBytes()[left] = buf.getUnsafeBytes()[right];
-            buf.getUnsafeBytes()[right] = tmp;
+            final byte tmp = buf.getUnsafeBytes().get(left);
+            buf.getUnsafeBytes().set(left, buf.getUnsafeBytes().get(right));
+            buf.getUnsafeBytes().set(right, tmp);
 
             left++;
             right--;
         }
 
-        return buf.getBytes();
+        return buf.getBytesArray();
     }
 
 }

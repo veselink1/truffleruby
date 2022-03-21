@@ -74,6 +74,7 @@ import org.truffleruby.core.regexp.RegexpCacheKey;
 import org.truffleruby.core.regexp.RegexpTable;
 import org.truffleruby.core.regexp.RubyMatchData;
 import org.truffleruby.core.regexp.RubyRegexp;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.PathToRopeCache;
 import org.truffleruby.core.rope.Rope;
@@ -760,7 +761,7 @@ public final class RubyLanguage extends TruffleLanguage<RubyContext> {
     }
 
     public ImmutableRubyString getFrozenStringLiteral(byte[] bytes, Encoding encoding, CodeRange codeRange) {
-        return frozenStringLiterals.getFrozenStringLiteral(bytes, encoding, codeRange);
+        return frozenStringLiterals.getFrozenStringLiteral(new Bytes(bytes), encoding, codeRange);
     }
 
     public ImmutableRubyString getFrozenStringLiteral(Rope rope) {

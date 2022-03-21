@@ -15,6 +15,7 @@ import java.util.Arrays;
 import com.oracle.truffle.api.frame.FrameUtil;
 import org.truffleruby.core.array.ArrayUtils;
 import org.truffleruby.core.format.exceptions.TooFewArgumentsException;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.RopeConstants;
 import org.truffleruby.language.RubyBaseNode;
@@ -160,6 +161,14 @@ public abstract class FormatNode extends RubyBaseNode {
         increaseStringLength(frame, valuesLength);
     }
 
+    protected void writeBytes(VirtualFrame frame, Bytes values) {
+        byte[] output = ensureCapacity(frame, values.length);
+        final int outputPosition = getOutputPosition(frame);
+        System.arraycopy(values.array, values.offset, output, outputPosition, values.length);
+        setOutputPosition(frame, outputPosition + values.length);
+        increaseStringLength(frame, values.length);
+    }
+
     protected void writeNullBytes(VirtualFrame frame, int length) {
         if (writeMoreThanZeroBytes.profile(length > 0)) {
             ensureCapacity(frame, length);
@@ -185,7 +194,7 @@ public abstract class FormatNode extends RubyBaseNode {
     }
 
     private static final Class<? extends ByteBuffer> HEAP_BYTE_BUFFER_CLASS = ByteBuffer
-            .wrap(RopeConstants.EMPTY_BYTES)
+            .wrap(RopeConstants.EMPTY_BYTES.array, RopeConstants.EMPTY_BYTES.offset, RopeConstants.EMPTY_BYTES.length)
             .getClass();
 
     public ByteBuffer wrapByteBuffer(VirtualFrame frame, byte[] source) {

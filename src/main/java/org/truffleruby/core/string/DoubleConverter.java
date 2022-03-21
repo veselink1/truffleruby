@@ -28,11 +28,12 @@
  ***** END LICENSE BLOCK *****/
 package org.truffleruby.core.string;
 
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.parser.SafeDoubleParser;
 
 public class DoubleConverter {
-    private byte[] bytes;
+    private Bytes bytes;
     private int index;
     private int endIndex;
     private boolean isStrict;
@@ -76,7 +77,7 @@ public class DoubleConverter {
     }
 
     private byte next() {
-        return bytes[index++];
+        return bytes.get(index++);
     }
 
     /** Shift back to previous character in the incoming bytes
@@ -407,7 +408,7 @@ public class DoubleConverter {
     }
 
     private void verifyNumberAfterUnderscore() {
-        if (isStrict && (isEOS() || !isDigit(bytes[index]))) {
+        if (isStrict && (isEOS() || !isDigit(bytes.get(index)))) {
             strictError();
         }
     }

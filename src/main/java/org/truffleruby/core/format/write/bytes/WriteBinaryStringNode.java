@@ -89,7 +89,7 @@ public abstract class WriteBinaryStringNode extends FormatNode {
     @Specialization
     protected Object write(VirtualFrame frame, Rope rope,
             @Cached RopeNodes.BytesNode bytesNode) {
-        return write(frame, bytesNode.execute(rope));
+        return write(frame, bytesNode.execute(rope).toArray());
     }
 
 }

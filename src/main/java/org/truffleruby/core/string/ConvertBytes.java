@@ -20,6 +20,7 @@ import com.oracle.truffle.api.CompilerDirectives;
 import org.truffleruby.RubyContext;
 import org.truffleruby.core.CoreLibrary;
 import org.truffleruby.core.numeric.FixnumOrBignumNode;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeBuilder;
 import org.truffleruby.core.rope.RopeNodes;
@@ -36,7 +37,7 @@ public class ConvertBytes {
     private final Rope rope;
     private int p;
     private int end;
-    private byte[] data;
+    private Bytes data;
     private int base;
     private final boolean badcheck;
 
@@ -61,11 +62,11 @@ public class ConvertBytes {
         this.base = base;
     }
 
-    private static final byte[][] MIN_VALUE_BYTES;
+    private static final Bytes[] MIN_VALUE_BYTES;
     static {
-        MIN_VALUE_BYTES = new byte[37][];
+        MIN_VALUE_BYTES = new Bytes[37];
         for (int i = 2; i <= 36; i++) {
-            MIN_VALUE_BYTES[i] = RopeOperations.encodeAsciiBytes(Long.toString(Long.MIN_VALUE, i));
+            MIN_VALUE_BYTES[i] = new Bytes(RopeOperations.encodeAsciiBytes(Long.toString(Long.MIN_VALUE, i)));
         }
     }
 
@@ -87,7 +88,7 @@ public class ConvertBytes {
     /** ISSPACE */
     private boolean isSpace(int str) {
         byte c;
-        if (str == end || (c = data[str]) < 0) {
+        if (str == end || (c = data.get(str)) < 0) {
             return false;
         }
         return space[c];
@@ -96,9 +97,9 @@ public class ConvertBytes {
     private boolean getSign() {
         boolean sign = true;
         if (p < end) {
-            if (data[p] == '+') {
+            if (data.get(p) == '+') {
                 p++;
-            } else if (data[p] == '-') {
+            } else if (data.get(p) == '-') {
                 p++;
                 sign = false;
             }
@@ -115,9 +116,9 @@ public class ConvertBytes {
 
     private void figureOutBase() {
         if (base <= 0) {
-            if (p < end && data[p] == '0') {
+            if (p < end && data.get(p) == '0') {
                 if (p + 1 < end) {
-                    switch (data[p + 1]) {
+                    switch (data.get(p + 1)) {
                         case 'x':
                         case 'X':
                             base = 16;
@@ -150,7 +151,7 @@ public class ConvertBytes {
 
     private int calculateLength() {
         int len;
-        byte second = ((p + 1 < end) && data[p] == '0') ? data[p + 1] : (byte) 0;
+        byte second = ((p + 1 < end) && data.get(p) == '0') ? data.get(p + 1) : (byte) 0;
 
         switch (base) {
             case 2:
@@ -213,10 +214,10 @@ public class ConvertBytes {
 
     private void squeezeZeroes() {
         byte c;
-        if (p < end && data[p] == '0') {
+        if (p < end && data.get(p) == '0') {
             p++;
             int us = 0;
-            while ((p < end) && ((c = data[p]) == '0' || c == '_')) {
+            while ((p < end) && ((c = data.get(p)) == '0' || c == '_')) {
                 if (c == '_') {
                     if (++us >= 2) {
                         break;
@@ -246,10 +247,10 @@ public class ConvertBytes {
 
         if (s != end) {
             boolean negative = false;
-            if (data[s] == '-') {
+            if (data.get(s) == '-') {
                 negative = true;
                 s++;
-            } else if (data[s] == '+') {
+            } else if (data.get(s) == '+') {
                 negative = false;
                 s++;
             }
@@ -262,7 +263,7 @@ public class ConvertBytes {
             final long cutlim = Long.MAX_VALUE % base;
 
             while (s < end) {
-                c = convertDigit(data[s]);
+                c = convertDigit(data.get(s));
 
                 if (c == -1 || c >= base) {
                     break;
@@ -296,7 +297,8 @@ public class ConvertBytes {
         }
 
         if (endptr != null) {
-            if (save - nptr >= 2 && (data[save - 1] == 'x' || data[save - 1] == 'X') && data[save - 2] == '0') {
+            if (save - nptr >= 2 && (data.get(save - 1) == 'x' || data.get(save - 1) == 'X') &&
+                    data.get(save - 2) == '0') {
                 endptr[0] = save - 1;
             } else {
                 endptr[0] = nptr;
@@ -312,7 +314,7 @@ public class ConvertBytes {
         boolean sign = getSign();
 
         if (p < end) {
-            if (data[p] == '+' || data[p] == '-') {
+            if (data.get(p) == '+' || data.get(p) == '-') {
                 if (badcheck) {
                     invalidString();
                 }
@@ -328,7 +330,7 @@ public class ConvertBytes {
 
         byte c = 0;
         if (p < end) {
-            c = data[p];
+            c = data.get(p);
         }
         c = convertDigit(c);
         if (c < 0 || c >= base) {
@@ -348,7 +350,7 @@ public class ConvertBytes {
             int[] endPlace = new int[]{ p };
             long val = stringToLong(p, endPlace, base);
 
-            if (endPlace[0] < end && data[endPlace[0]] == '_') {
+            if (endPlace[0] < end && data.get(endPlace[0]) == '_') {
                 return bigParse(len, sign);
             }
             if (badcheck) {
@@ -385,7 +387,7 @@ public class ConvertBytes {
     private int trailingLength() {
         int newLen = 0;
         for (int i = p; i < end; i++) {
-            if (Character.isDigit(data[i])) {
+            if (Character.isDigit(data.get(i))) {
                 newLen++;
             } else {
                 return newLen;
@@ -395,7 +397,7 @@ public class ConvertBytes {
     }
 
     private Object bigParse(int len, boolean sign) {
-        if (badcheck && p < end && data[p] == '_') {
+        if (badcheck && p < end && data.get(p) == '_') {
             invalidString();
         }
 
@@ -407,7 +409,7 @@ public class ConvertBytes {
         // str2big_scan_digits
         {
             while (p < end) {
-                byte c = data[p++];
+                byte c = data.get(p++);
                 byte cx = c;
                 if (c == '_') {
                     if (nondigit != -1) {
@@ -435,10 +437,10 @@ public class ConvertBytes {
             int tmpStr = p;
             if (badcheck) {
                 // no str-- here because we don't null-terminate strings
-                if (1 < tmpStr && data[tmpStr - 1] == '_') {
+                if (1 < tmpStr && data.get(tmpStr - 1) == '_') {
                     invalidString();
                 }
-                while (tmpStr < end && Character.isWhitespace(data[tmpStr])) {
+                while (tmpStr < end && Character.isWhitespace(data.get(tmpStr))) {
                     tmpStr++;
                 }
                 if (tmpStr < end) {
@@ -455,7 +457,7 @@ public class ConvertBytes {
         }
 
         if (badcheck) {
-            if (1 < p && data[p - 1] == '_') {
+            if (1 < p && data.get(p - 1) == '_') {
                 invalidString();
             }
             while (p < end && isSpace(p)) {
@@ -543,52 +545,52 @@ public class ConvertBytes {
                 context.getCoreExceptions().argumentErrorInvalidStringToInteger(rope, caller));
     }
 
-    public static final byte[] intToBinaryBytes(int i) {
+    public static final Bytes intToBinaryBytes(int i) {
         return intToUnsignedBytes(i, 1, LOWER_DIGITS).getBytes();
     }
 
-    public static final byte[] intToOctalBytes(int i) {
+    public static final Bytes intToOctalBytes(int i) {
         return intToUnsignedBytes(i, 3, LOWER_DIGITS).getBytes();
     }
 
-    public static final byte[] intToHexBytes(int i, boolean upper) {
+    public static final Bytes intToHexBytes(int i, boolean upper) {
         RopeBuilder ropeBuilder = intToUnsignedBytes(i, 4, upper ? UPPER_DIGITS : LOWER_DIGITS);
         return ropeBuilder.getBytes();
     }
 
-    public static final byte[] intToByteArray(int i, int radix, boolean upper) {
+    public static final Bytes intToByteArray(int i, int radix, boolean upper) {
         return longToByteArray(i, radix, upper);
     }
 
-    public static final byte[] intToCharBytes(int i) {
+    public static final Bytes intToCharBytes(int i) {
         return longToBytes(i, 10, LOWER_DIGITS).getBytes();
     }
 
-    public static final byte[] longToBinaryBytes(long i) {
+    public static final Bytes longToBinaryBytes(long i) {
         return longToUnsignedBytes(i, 1, LOWER_DIGITS).getBytes();
     }
 
-    public static final byte[] longToOctalBytes(long i) {
+    public static final Bytes longToOctalBytes(long i) {
         return longToUnsignedBytes(i, 3, LOWER_DIGITS).getBytes();
     }
 
-    public static final byte[] longToHexBytes(long i, boolean upper) {
+    public static final Bytes longToHexBytes(long i, boolean upper) {
         RopeBuilder ropeBuilder = longToUnsignedBytes(i, 4, upper ? UPPER_DIGITS : LOWER_DIGITS);
         return ropeBuilder.getBytes();
     }
 
-    public static final byte[] longToByteArray(long i, int radix, boolean upper) {
+    public static final Bytes longToByteArray(long i, int radix, boolean upper) {
         RopeBuilder ropeBuilder = longToBytes(i, radix, upper ? UPPER_DIGITS : LOWER_DIGITS);
         return ropeBuilder.getBytes();
     }
 
-    public static final byte[] longToCharBytes(long i) {
+    public static final Bytes longToCharBytes(long i) {
         return longToBytes(i, 10, LOWER_DIGITS).getBytes();
     }
 
     public static final RopeBuilder longToBytes(long i, int radix, byte[] digitmap) {
         if (i == 0) {
-            return RopeBuilder.createRopeBuilder(ZERO_BYTES);
+            return RopeBuilder.createRopeBuilder(new Bytes(ZERO_BYTES));
         }
 
         if (i == Long.MIN_VALUE) {
@@ -613,7 +615,7 @@ public class ConvertBytes {
             buf[--pos] = (byte) '-';
         }
 
-        return RopeBuilder.createRopeBuilder(buf, pos, len - pos);
+        return RopeBuilder.createRopeBuilder(new Bytes(buf), pos, len - pos);
     }
 
     private static final RopeBuilder intToUnsignedBytes(int i, int shift, byte[] digitmap) {
@@ -625,7 +627,7 @@ public class ConvertBytes {
             buf[--charPos] = digitmap[(int) (i & mask)];
             i >>>= shift;
         } while (i != 0);
-        return RopeBuilder.createRopeBuilder(buf, charPos, (32 - charPos));
+        return RopeBuilder.createRopeBuilder(new Bytes(buf), charPos, (32 - charPos));
     }
 
     private static final RopeBuilder longToUnsignedBytes(long i, int shift, byte[] digitmap) {
@@ -637,18 +639,18 @@ public class ConvertBytes {
             buf[--charPos] = digitmap[(int) (i & mask)];
             i >>>= shift;
         } while (i != 0);
-        return RopeBuilder.createRopeBuilder(buf, charPos, (64 - charPos));
+        return RopeBuilder.createRopeBuilder(new Bytes(buf), charPos, (64 - charPos));
     }
 
-    public static final byte[] twosComplementToBinaryBytes(byte[] in) {
+    public static final Bytes twosComplementToBinaryBytes(Bytes in) {
         return twosComplementToUnsignedBytes(in, 1, false);
     }
 
-    public static final byte[] twosComplementToOctalBytes(byte[] in) {
+    public static final Bytes twosComplementToOctalBytes(Bytes in) {
         return twosComplementToUnsignedBytes(in, 3, false);
     }
 
-    public static final byte[] twosComplementToHexBytes(byte[] in, boolean upper) {
+    public static final Bytes twosComplementToHexBytes(Bytes in, boolean upper) {
         return twosComplementToUnsignedBytes(in, 4, upper);
     }
 
@@ -732,7 +734,7 @@ public class ConvertBytes {
             'Z'
     };
 
-    public static final byte[] twosComplementToUnsignedBytes(byte[] in, int shift, boolean upper) {
+    public static final Bytes twosComplementToUnsignedBytes(Bytes in, int shift, boolean upper) {
         if (shift < 1 || shift > 4) {
             throw CompilerDirectives.shouldNotReachHere("shift value must be 1-4");
         }
@@ -745,14 +747,14 @@ public class ConvertBytes {
         int bitcnt = 0;
         for (int i = ilen, o = olen; --o >= 0;) {
             if (bitcnt < shift) {
-                bitbuf |= (in[--i] & 0xff) << bitcnt;
+                bitbuf |= (in.get(--i) & 0xff) << bitcnt;
                 bitcnt += 8;
             }
             out[o] = digits[bitbuf & mask];
             bitbuf >>= shift;
             bitcnt -= shift;
         }
-        return out;
+        return new Bytes(out);
     }
 
     private static final byte[] conv_digit = new byte[128];

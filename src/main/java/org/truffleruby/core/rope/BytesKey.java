@@ -9,20 +9,18 @@
  */
 package org.truffleruby.core.rope;
 
-import java.util.Arrays;
-
 import org.jcodings.Encoding;
 
 public class BytesKey {
 
-    private final byte[] bytes;
+    private final Bytes bytes;
     private final Encoding encoding;
     private final int bytesHashCode;
 
-    public BytesKey(byte[] bytes, Encoding encoding) {
+    public BytesKey(Bytes bytes, Encoding encoding) {
         this.bytes = bytes;
         this.encoding = encoding;
-        this.bytesHashCode = Arrays.hashCode(bytes);
+        this.bytesHashCode = bytes.hashCode();
     }
 
     @Override
@@ -34,7 +32,7 @@ public class BytesKey {
     public boolean equals(Object o) {
         if (o instanceof BytesKey) {
             final BytesKey other = (BytesKey) o;
-            return ((encoding == other.encoding) || (encoding == null)) && Arrays.equals(bytes, other.bytes);
+            return ((encoding == other.encoding) || (encoding == null)) && Bytes.equals(bytes, other.bytes);
         }
 
         return false;

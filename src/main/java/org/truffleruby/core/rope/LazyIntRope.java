@@ -87,8 +87,8 @@ public class LazyIntRope extends ManagedRope {
 
 
     @Override
-    protected byte[] getBytesSlow() {
-        return RopeOperations.encodeAsciiBytes(valueToString(value));
+    protected Bytes getBytesSlow() {
+        return new Bytes(RopeOperations.encodeAsciiBytes(valueToString(value)));
     }
 
     @TruffleBoundary
@@ -102,7 +102,7 @@ public class LazyIntRope extends ManagedRope {
 
     @Override
     protected byte getByteSlow(int index) {
-        return getBytes()[index];
+        return getBytes().get(index);
     }
 
 }

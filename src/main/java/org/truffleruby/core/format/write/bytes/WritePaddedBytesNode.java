@@ -40,7 +40,7 @@ public abstract class WritePaddedBytesNode extends FormatNode {
             @Cached RopeNodes.BytesNode bytesNode,
             @Cached RopeNodes.CharacterLengthNode charLengthNode,
             @Cached StringNodes.ByteIndexFromCharIndexNode indexNode) {
-        final byte[] bytes = bytesNode.execute(rope);
+        final byte[] bytes = bytesNode.execute(rope).toArray();
         if (leftJustifiedProfile.profile(leftJustified)) {
             writeStringBytes(frame, precision, rope, bytesNode, indexNode);
             writePaddingBytes(frame, padding, precision, rope, charLengthNode);
@@ -54,7 +54,7 @@ public abstract class WritePaddedBytesNode extends FormatNode {
     private void writeStringBytes(VirtualFrame frame, int precision, Rope rope,
             RopeNodes.BytesNode bytesNode,
             StringNodes.ByteIndexFromCharIndexNode indexNode) {
-        byte[] bytes = bytesNode.execute(rope);
+        byte[] bytes = bytesNode.execute(rope).toArray();
         int length;
         if (precisionProfile.profile(precision >= 0 && bytes.length > precision)) {
             int index = indexNode.execute(rope, 0, precision);

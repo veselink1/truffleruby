@@ -31,20 +31,20 @@ public class RopeBuilder extends ByteArrayBuilder {
         return new RopeBuilder(size);
     }
 
-    public static RopeBuilder createRopeBuilder(byte[] bytes, Encoding encoding) {
+    public static RopeBuilder createRopeBuilder(Bytes bytes, Encoding encoding) {
         final RopeBuilder builder = new RopeBuilder(bytes.length);
         builder.append(bytes);
         builder.setEncoding(encoding);
         return builder;
     }
 
-    public static RopeBuilder createRopeBuilder(byte[] wrap) {
+    public static RopeBuilder createRopeBuilder(Bytes wrap) {
         final RopeBuilder builder = new RopeBuilder(wrap.length);
         builder.append(wrap);
         return builder;
     }
 
-    public static RopeBuilder createRopeBuilder(byte[] wrap, int index, int len) {
+    public static RopeBuilder createRopeBuilder(Bytes wrap, int index, int len) {
         final RopeBuilder builder = new RopeBuilder(len);
         builder.append(wrap, index, len);
         return builder;

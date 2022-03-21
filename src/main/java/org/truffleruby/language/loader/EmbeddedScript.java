@@ -88,7 +88,7 @@ public class EmbeddedScript {
 
         transformed.append(sourceBytes, n, sourceBytes.length - n);
 
-        return transformed.getBytes();
+        return transformed.getBytesArray();
     }
 
     private boolean isShebangLine(byte[] bytes) {

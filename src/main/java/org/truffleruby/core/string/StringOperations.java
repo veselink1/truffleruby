@@ -36,6 +36,7 @@ import org.truffleruby.RubyLanguage;
 import org.truffleruby.core.array.ArrayOperations;
 import org.truffleruby.core.encoding.Encodings;
 import org.truffleruby.core.encoding.RubyEncoding;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.LeafRope;
 import org.truffleruby.core.rope.Rope;
@@ -84,7 +85,7 @@ public abstract class StringOperations {
     }
 
     @TruffleBoundary
-    public static byte[] encodeBytes(String value, Encoding encoding) {
+    public static Bytes encodeBytes(String value, Encoding encoding) {
         // Taken from org.jruby.RubyString#encodeByteList.
 
         if (encoding == ASCIIEncoding.INSTANCE && !isAsciiOnly(value)) {
@@ -104,7 +105,7 @@ public abstract class StringOperations {
         final byte[] bytes = new byte[buffer.limit()];
         buffer.get(bytes);
 
-        return bytes;
+        return new Bytes(bytes);
     }
 
     public static LeafRope encodeRope(String value, Encoding encoding, CodeRange codeRange) {
@@ -112,7 +113,7 @@ public abstract class StringOperations {
             return RopeOperations.encodeAscii(value, encoding);
         }
 
-        final byte[] bytes = encodeBytes(value, encoding);
+        final Bytes bytes = encodeBytes(value, encoding);
 
         return RopeOperations.create(bytes, encoding, codeRange);
     }

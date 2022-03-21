@@ -23,6 +23,7 @@ import org.truffleruby.collections.ByteArrayBuilder;
 import org.truffleruby.core.format.FormatNode;
 import org.truffleruby.core.format.printf.PrintfSimpleTreeBuilder;
 import org.truffleruby.core.numeric.RubyBignum;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.string.ConvertBytes;
 
 import java.math.BigInteger;
@@ -32,13 +33,13 @@ import java.math.BigInteger;
 @NodeChild("value")
 public abstract class FormatIntegerNode extends FormatNode {
 
-    private static final byte[] PREFIX_OCTAL = { '0' };
-    private static final byte[] PREFIX_HEX_LC = { '0', 'x' };
-    private static final byte[] PREFIX_HEX_UC = { '0', 'X' };
-    private static final byte[] PREFIX_BINARY_LC = { '0', 'b' };
-    private static final byte[] PREFIX_BINARY_UC = { '0', 'B' };
+    private static final Bytes PREFIX_OCTAL = new Bytes((byte) '0');
+    private static final Bytes PREFIX_HEX_LC = new Bytes(new byte[]{ '0', 'x' });
+    private static final Bytes PREFIX_HEX_UC = new Bytes(new byte[]{ '0', 'X' });
+    private static final Bytes PREFIX_BINARY_LC = new Bytes(new byte[]{ '0', 'b' });
+    private static final Bytes PREFIX_BINARY_UC = new Bytes(new byte[]{ '0', 'B' });
 
-    private static final byte[] PREFIX_NEGATIVE = { '.', '.' };
+    private static final Bytes PREFIX_NEGATIVE = new Bytes(new byte[]{ '.', '.' });
 
     private static final BigInteger BIG_32 = BigInteger.valueOf((Integer.MAX_VALUE + 1L) << 1);
     private static final BigInteger BIG_64 = BIG_32.shiftLeft(32);
@@ -69,13 +70,13 @@ public abstract class FormatIntegerNode extends FormatNode {
 
     @TruffleBoundary
     @Specialization
-    protected byte[] format(int width, int precision, int arg) {
+    protected Bytes format(int width, int precision, int arg) {
         return format(width, precision, (long) arg);
     }
 
     @TruffleBoundary
     @Specialization
-    protected byte[] format(int width, int precision, long arg) {
+    protected Bytes format(int width, int precision, long arg) {
 
         final char fchar = this.getFormatCharacter();
         final boolean sign = this.getSign(fchar);
@@ -83,7 +84,7 @@ public abstract class FormatIntegerNode extends FormatNode {
         final boolean zero = arg == 0;
         final boolean negative = arg < 0;
 
-        final byte[] bytes;
+        final Bytes bytes;
         if (negative && fchar == 'u') {
             bytes = getUnsignedNegativeBytes(arg);
         } else {
@@ -95,7 +96,7 @@ public abstract class FormatIntegerNode extends FormatNode {
 
     @TruffleBoundary
     @Specialization
-    protected byte[] format(int width, int precision, RubyBignum value) {
+    protected Bytes format(int width, int precision, RubyBignum value) {
         final BigInteger bigInteger = value.value;
         final boolean negative = bigInteger.signum() < 0;
         final boolean zero = bigInteger.equals(BigInteger.ZERO);
@@ -103,7 +104,7 @@ public abstract class FormatIntegerNode extends FormatNode {
         final boolean sign = this.getSign(fchar);
         final int base = getBase(fchar);
 
-        final byte[] bytes;
+        final Bytes bytes;
         if (negative && fchar == 'u') {
             bytes = getUnsignedNegativeBytes(bigInteger);
         } else {
@@ -112,8 +113,8 @@ public abstract class FormatIntegerNode extends FormatNode {
         return formatBytes(width, precision, fchar, sign, base, zero, negative, bytes);
     }
 
-    private byte[] formatBytes(int width, int precision, char fchar, boolean sign, int base, boolean zero,
-            boolean negative, byte[] bytes) {
+    private Bytes formatBytes(int width, int precision, char fchar, boolean sign, int base, boolean zero,
+            boolean negative, Bytes bytes) {
         boolean hasMinusFlag = this.hasMinusFlag;
         if (width == PrintfSimpleTreeBuilder.DEFAULT) {
             width = 0;
@@ -127,7 +128,7 @@ public abstract class FormatIntegerNode extends FormatNode {
         }
 
         int first = 0;
-        byte[] prefix = null;
+        Bytes prefix = null;
 
         byte signChar = 0;
         byte leadChar = 0;
@@ -293,7 +294,7 @@ public abstract class FormatIntegerNode extends FormatNode {
     }
 
 
-    private static byte[] getFixnumBytes(long arg, int base, boolean sign, boolean upper) {
+    private static Bytes getFixnumBytes(long arg, int base, boolean sign, boolean upper) {
         long val = arg;
 
         // limit the length of negatives if possible (also faster)
@@ -332,35 +333,35 @@ public abstract class FormatIntegerNode extends FormatNode {
         }
     }
 
-    private static int skipSignBits(byte[] bytes, int base) {
+    private static int skipSignBits(Bytes bytes, int base) {
         int skip = 0;
         int length = bytes.length;
         byte b;
         switch (base) {
             case 2:
-                for (; skip < length && bytes[skip] == '1'; skip++) {
+                for (; skip < length && bytes.get(skip) == '1'; skip++) {
                 }
                 break;
             case 8:
-                if (length > 0 && bytes[0] == '3') {
+                if (length > 0 && bytes.get(0) == '3') {
                     skip++;
                 }
-                for (; skip < length && bytes[skip] == '7'; skip++) {
+                for (; skip < length && bytes.get(skip) == '7'; skip++) {
                 }
                 break;
             case 10:
-                if (length > 0 && bytes[0] == '-') {
+                if (length > 0 && bytes.get(0) == '-') {
                     skip++;
                 }
                 break;
             case 16:
-                for (; skip < length && ((b = bytes[skip]) == 'f' || b == 'F'); skip++) {
+                for (; skip < length && ((b = bytes.get(skip)) == 'f' || b == 'F'); skip++) {
                 }
         }
         return skip;
     }
 
-    private static byte[] getUnsignedNegativeBytes(long arg) {
+    private static Bytes getUnsignedNegativeBytes(long arg) {
         return ConvertBytes.longToCharBytes(((Long.MAX_VALUE + 1L) << 1) + arg);
     }
 
@@ -379,7 +380,7 @@ public abstract class FormatIntegerNode extends FormatNode {
         return fchar;
     }
 
-    private byte[] getUnsignedNegativeBytes(BigInteger bigval) {
+    private Bytes getUnsignedNegativeBytes(BigInteger bigval) {
         // calculation for negatives when %u specified
         // for values >= Integer.MIN_VALUE * 2, MRI uses (the equivalent of)
         //   long neg_u = (((long)Integer.MAX_VALUE + 1) << 1) + val
@@ -397,13 +398,13 @@ public abstract class FormatIntegerNode extends FormatNode {
         return stringToBytes(nPower32.add(bigval).toString(), false);
     }
 
-    private static byte[] getBignumBytes(BigInteger val, int base, boolean sign, boolean upper) {
+    private static Bytes getBignumBytes(BigInteger val, int base, boolean sign, boolean upper) {
         if (sign || base == 10 || val.signum() >= 0) {
             return stringToBytes(val.toString(base), upper);
         }
 
         // negative values
-        byte[] bytes = val.toByteArray();
+        Bytes bytes = new Bytes(val.toByteArray());
         switch (base) {
             case 2:
                 return ConvertBytes.twosComplementToBinaryBytes(bytes);
@@ -417,7 +418,7 @@ public abstract class FormatIntegerNode extends FormatNode {
     }
 
 
-    private static byte[] stringToBytes(CharSequence s, boolean upper) {
+    private static Bytes stringToBytes(CharSequence s, boolean upper) {
         int len = s.length();
         byte[] bytes = new byte[len];
         if (upper) {
@@ -434,7 +435,7 @@ public abstract class FormatIntegerNode extends FormatNode {
                 bytes[i] = (byte) (s.charAt(i) & 0xff);
             }
         }
-        return bytes;
+        return new Bytes(bytes);
     }
 
 }

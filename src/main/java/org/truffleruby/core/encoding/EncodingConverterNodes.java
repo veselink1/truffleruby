@@ -38,6 +38,7 @@ import org.truffleruby.core.cast.ToStrNode;
 import org.truffleruby.core.cast.ToStrNodeGen;
 import org.truffleruby.core.hash.RubyHash;
 import org.truffleruby.core.klass.RubyClass;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.CodeRange;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeBuilder;
@@ -111,12 +112,14 @@ public abstract class EncodingConverterNodes {
             for (int i = 0; i < econv.numTranscoders; i++) {
                 final Transcoder transcoder = econv.elements[i].transcoding.transcoder;
 
-                if (EncodingUtils.DECORATOR_P(transcoder.getSource(), transcoder.getDestination())) {
+                if (EncodingUtils
+                        .DECORATOR_P(new Bytes(transcoder.getSource()), new Bytes(transcoder.getDestination()))) {
                     continue;
                 }
 
                 final byte[] segmentSource = transcoder.getSource();
-                ret[retIndex++] = getSymbol(StringUtils.toUpperCase(RopeOperations.decodeAscii(segmentSource)));
+                ret[retIndex++] = getSymbol(
+                        StringUtils.toUpperCase(RopeOperations.decodeAscii(new Bytes(segmentSource))));
             }
 
             final int retSize = retIndex + 1;
@@ -127,7 +130,7 @@ public abstract class EncodingConverterNodes {
             }
 
             final byte[] destinationName = destinationEncoding.getName();
-            ret[retIndex] = getSymbol(StringUtils.toUpperCase(RopeOperations.decodeAscii(destinationName)));
+            ret[retIndex] = getSymbol(StringUtils.toUpperCase(RopeOperations.decodeAscii(new Bytes(destinationName))));
 
             return createArray(ret);
         }
@@ -296,15 +299,15 @@ public abstract class EncodingConverterNodes {
 
                 outBytes.unsafeEnsureSpace((int) outputByteEnd);
 
-                inPtr.p = 0;
-                outPtr.p = offset;
+                inPtr.p = sourceRope.getBytes().offset;
+                outPtr.p = outBytes.getUnsafeBytes().offset + offset;
                 int os = outPtr.p + size;
                 EConvResult res = convert(
                         ec,
-                        sourceRope.getBytes(),
+                        sourceRope.getBytes().array,
                         inPtr,
                         sourceRope.byteLength() + inPtr.p,
-                        outBytes.getUnsafeBytes(),
+                        outBytes.getUnsafeBytes().array,
                         outPtr,
                         os,
                         options);
@@ -411,13 +414,13 @@ public abstract class EncodingConverterNodes {
             store[1] = makeStringNode.executeMake(lastError.getSource(), Encodings.BINARY, CR_UNKNOWN);
             store[2] = makeStringNode.executeMake(lastError.getDestination(), Encodings.BINARY, CR_UNKNOWN);
             store[3] = makeStringNode.fromBuilderUnsafe(RopeBuilder.createRopeBuilder(
-                    lastError.getErrorBytes(),
+                    new Bytes(lastError.getErrorBytes()),
                     lastError.getErrorBytesP(),
                     lastError.getErrorBytesP() + lastError.getErrorBytesLength()), Encodings.BINARY, CR_UNKNOWN);
 
             if (readAgain) {
                 store[4] = makeStringNode.fromBuilderUnsafe(RopeBuilder.createRopeBuilder(
-                        lastError.getErrorBytes(),
+                        new Bytes(lastError.getErrorBytes()),
                         lastError.getErrorBytesLength() + lastError.getErrorBytesP(),
                         lastError.getReadAgainLength()), Encodings.BINARY, CR_UNKNOWN);
             }
@@ -471,14 +474,14 @@ public abstract class EncodingConverterNodes {
                 ret[3] = makeStringNode
                         .fromBuilderUnsafe(
                                 RopeBuilder.createRopeBuilder(
-                                        ec.lastError.getErrorBytes(),
+                                        new Bytes(ec.lastError.getErrorBytes()),
                                         ec.lastError.getErrorBytesP(),
                                         ec.lastError.getErrorBytesLength()),
                                 Encodings.BINARY,
                                 CR_UNKNOWN);
                 ret[4] = makeStringNode.fromBuilderUnsafe(
                         RopeBuilder.createRopeBuilder(
-                                ec.lastError.getErrorBytes(),
+                                new Bytes(ec.lastError.getErrorBytes()),
                                 ec.lastError.getErrorBytesP() + ec.lastError.getErrorBytesLength(),
                                 ec.lastError.getReadAgainLength()),
                         Encodings.BINARY,
@@ -548,8 +551,8 @@ public abstract class EncodingConverterNodes {
         }
 
         @TruffleBoundary
-        private int setReplacement(EConv ec, byte[] string, int len, byte[] encodingName) {
-            return ec.setReplacement(string, 0, len, encodingName);
+        private int setReplacement(EConv ec, Bytes string, int len, byte[] encodingName) {
+            return ec.setReplacement(string.array, string.offset, len, encodingName);
         }
 
     }

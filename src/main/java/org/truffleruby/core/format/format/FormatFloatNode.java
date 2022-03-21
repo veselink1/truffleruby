@@ -29,6 +29,7 @@ import org.truffleruby.core.format.printf.PrintfSimpleTreeBuilder;
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
 import com.oracle.truffle.api.dsl.NodeChild;
 import com.oracle.truffle.api.dsl.Specialization;
+import org.truffleruby.core.rope.Bytes;
 import org.truffleruby.core.rope.RopeOperations;
 
 @NodeChild("width")
@@ -63,7 +64,7 @@ public abstract class FormatFloatNode extends FormatNode {
 
     @TruffleBoundary
     @Specialization
-    protected byte[] format(int width, int precision, double dval) {
+    protected Bytes format(int width, int precision, double dval) {
         //        if (arg == null || name != null) {
         //            arg = args.next(name);
         //            name = null;

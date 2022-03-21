@@ -9,7 +9,6 @@
  */
 package org.truffleruby.core.rope;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -22,7 +21,7 @@ public class RopeConstants {
 
     public static final Map<String, LeafRope> ROPE_CONSTANTS = new HashMap<>();
 
-    public static final byte[] EMPTY_BYTES = new byte[0];
+    public static final Bytes EMPTY_BYTES = Bytes.EMPTY;
 
     public static final LeafRope EMPTY_ASCII_8BIT_ROPE = withHashCode(
             new AsciiOnlyLeafRope(EMPTY_BYTES, ASCIIEncoding.INSTANCE));
@@ -37,7 +36,7 @@ public class RopeConstants {
 
     static {
         for (int i = 0; i < 128; i++) {
-            final byte[] bytes = new byte[]{ (byte) i };
+            final Bytes bytes = Bytes.of((byte) i);
 
             UTF8_SINGLE_BYTE_ROPES[i] = withHashCode(new AsciiOnlyLeafRope(bytes, UTF8Encoding.INSTANCE));
             US_ASCII_SINGLE_BYTE_ROPES[i] = withHashCode(new AsciiOnlyLeafRope(bytes, USASCIIEncoding.INSTANCE));
@@ -45,7 +44,7 @@ public class RopeConstants {
         }
 
         for (int i = 128; i < 256; i++) {
-            final byte[] bytes = new byte[]{ (byte) i };
+            final Bytes bytes = Bytes.of((byte) i);
 
             UTF8_SINGLE_BYTE_ROPES[i] = withHashCode(new InvalidLeafRope(bytes, UTF8Encoding.INSTANCE, 1));
             US_ASCII_SINGLE_BYTE_ROPES[i] = withHashCode(new InvalidLeafRope(bytes, USASCIIEncoding.INSTANCE, 1));
@@ -220,7 +219,7 @@ public class RopeConstants {
         if (string.length() == 1) {
             return US_ASCII_SINGLE_BYTE_ROPES[string.charAt(0)];
         } else {
-            final byte[] bytes = RopeOperations.encodeAsciiBytes(string);
+            final Bytes bytes = new Bytes(RopeOperations.encodeAsciiBytes(string));
             final LeafRope rope = withHashCode(new AsciiOnlyLeafRope(bytes, USASCIIEncoding.INSTANCE));
             final Rope existing = ROPE_CONSTANTS.putIfAbsent(string, rope);
             if (existing != null) {
@@ -245,7 +244,7 @@ public class RopeConstants {
 
         for (int n = 0; n < table.length; n++) {
             table[n] = new AsciiOnlyLeafRope(
-                    new byte[]{ (byte) ('0' + n / 10), (byte) ('0' + n % 10) },
+                    Bytes.of((byte) ('0' + n / 10), (byte) ('0' + n % 10)),
                     UTF8Encoding.INSTANCE);
         }
 
@@ -263,9 +262,9 @@ public class RopeConstants {
         final LeafRope[] table = new LeafRope[6];
 
         for (int n = 0; n < table.length; n++) {
-            final byte[] bytes = new byte[n];
+            final Bytes bytes = new Bytes(n);
 
-            Arrays.fill(bytes, (byte) '0');
+            Bytes.fill(bytes, (byte) '0');
 
             table[n] = new AsciiOnlyLeafRope(bytes, UTF8Encoding.INSTANCE);
         }

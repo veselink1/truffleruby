@@ -47,20 +47,20 @@ public class RepeatingRope extends ManagedRope {
     }
 
     @Override
-    protected byte[] getBytesSlow() {
+    protected Bytes getBytesSlow() {
         if (child.getRawBytes() != null) {
-            final byte[] childBytes = child.getRawBytes();
+            final Bytes childBytes = child.getRawBytes();
             int len = childBytes.length * times;
-            final byte[] ret = new byte[len];
+            final Bytes ret = new Bytes(len);
 
             int n = childBytes.length;
 
-            System.arraycopy(childBytes, 0, ret, 0, n);
+            Bytes.copy(childBytes, 0, ret, 0, n);
             while (n <= len / 2) {
-                System.arraycopy(ret, 0, ret, n, n);
+                Bytes.copy(ret, 0, ret, n, n);
                 n *= 2;
             }
-            System.arraycopy(ret, 0, ret, n, len - n);
+            Bytes.copy(ret, 0, ret, n, len - n);
 
             return ret;
         }
