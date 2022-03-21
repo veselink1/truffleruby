@@ -30,6 +30,7 @@ import org.jcodings.Encoding;
 import org.jcodings.specific.ASCIIEncoding;
 import org.jcodings.specific.USASCIIEncoding;
 import org.jcodings.specific.UTF8Encoding;
+import org.truffleruby.RubyLanguage;
 import org.truffleruby.SuppressFBWarnings;
 import org.truffleruby.core.array.ArrayUtils;
 import org.truffleruby.core.encoding.RubyEncoding;
@@ -193,6 +194,7 @@ public abstract class RopeNodes {
     }
 
     @GenerateUncached
+    @ImportStatic(RubyLanguage.class)
     public abstract static class MakeSubstringRopeNode extends RubyBaseNode {
 
         public static MakeSubstringRopeNode create() {
@@ -201,12 +203,40 @@ public abstract class RopeNodes {
 
         public abstract Rope executeMake(Encoding encoding, Rope base, int byteOffset, int byteLength);
 
-        @Specialization(guards = "base.isAsciiOnly()")
+        @Specialization(guards = { "base.isAsciiOnly()", "byteLength <= SMALL_STRING_LENGTH" })
+        protected Rope makeSubstring7BitSmall(Encoding encoding, ManagedRope base, int byteOffset, int byteLength,
+                @Cached BytesNode bytesNode,
+                @Cached MakeLeafRopeNode makeLeafRopeNode) {
+            final byte[] sourceBytes = bytesNode.execute(base);
+            final byte[] bytes = new byte[byteLength];
+            System.arraycopy(sourceBytes, byteOffset, bytes, 0, byteLength);
+            return makeLeafRopeNode.executeMake(bytes, encoding, CR_7BIT, byteLength);
+        }
+
+        @Specialization(guards = { "base.isAsciiOnly()", "byteLength > SMALL_STRING_LENGTH" })
         protected Rope makeSubstring7Bit(Encoding encoding, ManagedRope base, int byteOffset, int byteLength) {
             return new SubstringRope(encoding, base, byteOffset, byteLength, byteLength, CR_7BIT);
         }
 
-        @Specialization(guards = "!base.isAsciiOnly()")
+        @Specialization(guards = { "!base.isAsciiOnly()", "byteLength <= SMALL_STRING_LENGTH" })
+        protected Rope makeSubstringNon7BitSmall(Encoding encoding, ManagedRope base, int byteOffset, int byteLength,
+                @Cached BytesNode bytesNode,
+                @Cached MakeLeafRopeNode makeLeafRopeNode,
+                @Cached CalculateAttributesNode calculateAttributes) {
+
+            final byte[] sourceBytes = bytesNode.execute(base);
+            final byte[] bytes = new byte[byteLength];
+            System.arraycopy(sourceBytes, byteOffset, bytes, 0, byteLength);
+            final StringAttributes attributes = calculateAttributes
+                    .executeCalculateAttributes(encoding, new Bytes(bytes));
+
+            final CodeRange codeRange = attributes.getCodeRange();
+            final int characterLength = attributes.getCharacterLength();
+
+            return makeLeafRopeNode.executeMake(bytes, encoding, codeRange, characterLength);
+        }
+
+        @Specialization(guards = { "!base.isAsciiOnly()", "byteLength > SMALL_STRING_LENGTH" })
         protected Rope makeSubstringNon7Bit(Encoding encoding, ManagedRope base, int byteOffset, int byteLength,
                 @Cached GetBytesObjectNode getBytesObject,
                 @Cached CalculateAttributesNode calculateAttributes) {
@@ -435,6 +465,37 @@ public abstract class RopeNodes {
         }
 
         @SuppressFBWarnings("RV")
+        @Specialization(
+                guards = {
+                        "!left.isEmpty()",
+                        "!right.isEmpty()",
+                        "!isCodeRangeBroken(left, right)",
+                        "isSmallString(left, right)",
+                        "encodingsCompatible(left, right)" })
+        protected Rope concatSmall(ManagedRope left, ManagedRope right, Encoding encoding,
+                @Cached MakeLeafRopeNode makeLeafRopeNode,
+                @Cached BytesNode leftBytesNode,
+                @Cached BytesNode rightBytesNode,
+                @Cached ConditionProfile sameCodeRangeProfile,
+                @Cached ConditionProfile brokenCodeRangeProfile) {
+
+            final byte[] leftBytes = leftBytesNode.execute(left);
+            final byte[] rightBytes = rightBytesNode.execute(right);
+            final byte[] bytes = new byte[leftBytes.length + rightBytes.length];
+            System.arraycopy(leftBytes, 0, bytes, 0, leftBytes.length);
+            System.arraycopy(rightBytes, 0, bytes, leftBytes.length, rightBytes.length);
+            return makeLeafRopeNode.executeMake(
+                    bytes,
+                    encoding,
+                    commonCodeRange(
+                            left.getCodeRange(),
+                            right.getCodeRange(),
+                            sameCodeRangeProfile,
+                            brokenCodeRangeProfile),
+                    left.characterLength() + right.characterLength());
+        }
+
+        @SuppressFBWarnings("RV")
         @Specialization(guards = { "!left.isEmpty()", "!right.isEmpty()", "!isCodeRangeBroken(left, right)" })
         protected Rope concat(ManagedRope left, ManagedRope right, Encoding encoding,
                 @Cached ConditionProfile sameCodeRangeProfile,
@@ -510,8 +571,26 @@ public abstract class RopeNodes {
             return CR_VALID;
         }
 
+        protected boolean encodingsCompatible(ManagedRope first, ManagedRope second) {
+            // The encodings are compatible if they are either the same encoding.
+            if (first.getEncoding() == second.getEncoding()) {
+                return true;
+            }
+
+            // Or if they are both ASCII-compatible.
+            if (!first.getEncoding().isAsciiCompatible()) {
+                return false;
+            }
+
+            return second.getEncoding().isAsciiCompatible();
+        }
+
         protected static boolean isCodeRangeBroken(ManagedRope first, ManagedRope second) {
             return first.getCodeRange() == CR_BROKEN || second.getCodeRange() == CR_BROKEN;
+        }
+
+        protected static boolean isSmallString(ManagedRope first, ManagedRope second) {
+            return first.byteLength() + second.characterLength() < RubyLanguage.SMALL_STRING_LENGTH;
         }
     }
 

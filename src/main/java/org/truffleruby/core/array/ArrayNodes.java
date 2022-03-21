@@ -114,7 +114,11 @@ import com.oracle.truffle.api.profiles.IntValueProfile;
 @CoreModule(value = "Array", isClass = true)
 public abstract class ArrayNodes {
 
-    @CoreMethod(names = { "__allocate__", "__layout_allocate__" }, constructor = true, visibility = Visibility.PRIVATE)
+    @CoreMethod(
+            names = { "__allocate__", "__layout_allocate__" },
+            constructor = true,
+            visibility = Visibility.PRIVATE,
+            split = Split.ALWAYS)
     public abstract static class AllocateNode extends CoreMethodArrayArgumentsNode {
 
         @Specialization

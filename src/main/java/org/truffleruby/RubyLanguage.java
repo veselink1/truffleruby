@@ -179,6 +179,9 @@ public final class RubyLanguage extends TruffleLanguage<RubyContext> {
 
     public static final TruffleLogger LOGGER = TruffleLogger.getLogger(TruffleRuby.LANGUAGE_ID);
 
+    // Strings smaller than this number will generally benefit from being represented as a flat LeafRope.
+    public static final int SMALL_STRING_LENGTH = 256;
+
     /** We need an extra indirection added to ContextThreadLocal due to multiple Fibers of different Ruby Threads
      * sharing the same Java Thread when using the fiber pool. */
     private static final class ThreadLocalState {

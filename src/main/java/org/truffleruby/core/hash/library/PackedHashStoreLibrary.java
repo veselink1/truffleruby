@@ -59,6 +59,10 @@ public class PackedHashStoreLibrary {
     private static final int ELEMENTS_PER_ENTRY = 3;
     public static final int TOTAL_ELEMENTS = MAX_ENTRIES * ELEMENTS_PER_ENTRY;
 
+    {
+        assert MAX_ENTRIES % 2 == 1 : "MAX_ENTRIES must be odd!";
+    }
+
     // region Utilities
 
     public static Object[] createStore() {
