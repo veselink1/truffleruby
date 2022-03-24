@@ -219,7 +219,6 @@ import org.truffleruby.language.yield.CallBlockNode;
 import org.truffleruby.utils.Utils;
 
 import com.oracle.truffle.api.CompilerDirectives.TruffleBoundary;
-import com.oracle.truffle.api.CompilerDirectives.CompilationFinal;
 import com.oracle.truffle.api.frame.VirtualFrame;
 import com.oracle.truffle.api.library.CachedLibrary;
 import com.oracle.truffle.api.nodes.DirectCallNode;
@@ -2424,15 +2423,20 @@ public abstract class StringNodes {
 
     }
 
-    @CoreMethod(names = "setbyte", required = 2, raiseIfFrozenSelf = true, lowerFixnum = { 1, 2 })
+    @CoreMethod(names = "setbyte", split = Split.ALWAYS, required = 2, raiseIfFrozenSelf = true, lowerFixnum = { 1, 2 })
     @NodeChild(value = "string", type = RubyNode.class)
     @NodeChild(value = "index", type = RubyBaseNodeWithExecute.class)
     @NodeChild(value = "value", type = RubyBaseNodeWithExecute.class)
     @ImportStatic(StringGuards.class)
     public abstract static class SetByteNode extends CoreMethodNode {
 
+        protected static class RewriteException extends RuntimeException {
+            private static final long serialVersionUID = 20384880932840L;
+        }
+
+        private RopeOptimizationHint ropeOptimizationHint = RopeOptimizationHint.UNDEFINED;
         @Child private CheckIndexNode checkIndexNode = CheckIndexNodeGen.create();
-        @Child private RopeNodes.SetByteNode setByteNode = RopeNodes.SetByteNode.create();
+        @Child private RopeNodes.SetByteNode setByteNode = RopeNodes.MutableSetByteNode.create();
 
         @CreateCast("index")
         protected ToIntNode coerceIndexToInt(RubyBaseNodeWithExecute index) {
@@ -2446,9 +2450,33 @@ public abstract class StringNodes {
 
         public abstract int executeSetByte(RubyString string, int index, Object value);
 
-        @Specialization
+        @Specialization(rewriteOn = RewriteException.class)
+        protected int setByteAndProfile(RubyString string, int index, int value,
+                @Cached ConditionProfile newRopeProfile,
+                @Cached("createEphemeral()") ProfileRopeMutationNode profileRopeNode) {
+            final Rope rope = string.rope;
+            final int normalizedIndex = checkIndexNode.executeCheck(index, rope.byteLength());
+
+            final Rope newRope = setByteNode.executeSetByte(rope, normalizedIndex, value);
+            ropeOptimizationHint = profileRopeNode.execute(rope, newRope);
+
+            if (ropeOptimizationHint == RopeOptimizationHint.IMMUTABLE) {
+                setByteNode.replace(RopeNodes.SetByteNode.create());
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                throw new RewriteException();
+            }
+
+            if (newRopeProfile.profile(newRope != rope)) {
+                string.setRope(newRope);
+            }
+
+            return value;
+        }
+
+        @Specialization(replaces = "setByteAndProfile")
         protected int setByte(RubyString string, int index, int value,
                 @Cached ConditionProfile newRopeProfile) {
+
             final Rope rope = string.rope;
             final int normalizedIndex = checkIndexNode.executeCheck(index, rope.byteLength());
 
@@ -5199,7 +5227,7 @@ public abstract class StringNodes {
             raiseIfFrozenSelf = true)
     public abstract static class ElementAssignmentNode extends CoreMethodArrayArgumentsNode {
 
-        @CompilationFinal private RopeOptimizationHint ropeOptimizationHint = RopeOptimizationHint.UNDEFINED;
+        private RopeOptimizationHint ropeOptimizationHint = RopeOptimizationHint.UNDEFINED;
 
         public abstract RubyString execute(RubyString string, Object index, Object countOrReplacement,
                 Object replacement);

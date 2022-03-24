@@ -37,6 +37,7 @@ import org.truffleruby.core.rope.ConcatRope.ConcatState;
 import org.truffleruby.core.rope.RopeNodesFactory.AreComparableRopesNodeGen;
 import org.truffleruby.core.rope.RopeNodesFactory.CompareRopesNodeGen;
 import org.truffleruby.core.rope.RopeNodesFactory.SetByteNodeGen;
+import org.truffleruby.core.rope.RopeNodesFactory.MutableSetByteNodeGen;
 import org.truffleruby.core.string.StringAttributes;
 import org.truffleruby.core.string.StringSupport;
 import org.truffleruby.language.NotProvided;
@@ -1103,12 +1104,6 @@ public abstract class RopeNodes {
 
     public abstract static class SetByteNode extends RubyBaseNode {
 
-        @Child private ConcatNode composedConcatNode = ConcatNode.create();
-        @Child private ConcatNode middleConcatNode = ConcatNode.create();
-        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeLeafRopeNode.create();
-        @Child private SubstringNode leftSubstringNode = SubstringNode.create();
-        @Child private SubstringNode rightSubstringNode = SubstringNode.create();
-
         public static SetByteNode create() {
             return SetByteNodeGen.create();
         }
@@ -1116,7 +1111,12 @@ public abstract class RopeNodes {
         public abstract Rope executeSetByte(Rope string, int index, int value);
 
         @Specialization
-        protected Rope setByte(ManagedRope rope, int index, int value) {
+        protected Rope setByte(ManagedRope rope, int index, int value,
+                @Cached ConcatNode composedConcatNode,
+                @Cached ConcatNode middleConcatNode,
+                @Cached MakeLeafRopeNode makeLeafRopeNode,
+                @Cached SubstringNode leftSubstringNode,
+                @Cached SubstringNode rightSubstringNode) {
             assert 0 <= index && index < rope.byteLength();
 
             final Rope left = leftSubstringNode.executeSubstring(rope, 0, index);
@@ -1138,6 +1138,25 @@ public abstract class RopeNodes {
         protected Rope setByte(NativeRope rope, int index, int value) {
             rope.set(index, value);
             return rope;
+        }
+
+    }
+
+    public abstract static class MutableSetByteNode extends SetByteNode {
+
+        public static MutableSetByteNode create() {
+            return MutableSetByteNodeGen.create();
+        }
+
+        @Specialization(insertBefore = "setByte", guards = "true")
+        protected Rope setByteMutable(ManagedRope rope, int index, int value,
+                @Cached GetMutableRopeNode getMutableRopeNode) {
+            assert 0 <= index && index < rope.byteLength();
+
+            final LeafRope mutableRope = getMutableRopeNode.execute(rope, rope.codeRange);
+            mutableRope.setByte(index, (byte) value);
+
+            return mutableRope;
         }
 
     }
