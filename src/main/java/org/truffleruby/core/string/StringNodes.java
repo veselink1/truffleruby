@@ -171,6 +171,7 @@ import org.truffleruby.core.rope.RopeNodes.MakeMutableLeafRopeNode;
 import org.truffleruby.core.rope.RopeNodes.RepeatNode;
 import org.truffleruby.core.rope.RopeNodes.SingleByteOptimizableNode;
 import org.truffleruby.core.rope.RopeNodes.SubstringNode;
+import org.truffleruby.core.rope.RopeNodes.BytesCopyNode;
 import org.truffleruby.core.rope.RopeNodes.WithEncodingNode;
 import org.truffleruby.core.rope.RopeOperations;
 import org.truffleruby.core.rope.RopeWithEncoding;
@@ -3174,12 +3175,7 @@ public abstract class StringNodes {
                 @Cached BranchProfile foundUpperCaseCharProfile,
                 @Cached ConditionProfile inplaceProfile,
                 @Cached LoopConditionProfile loopProfile) {
-            byte[] modified;
-            if (inplaceProfile.profile(inplace)) {
-                modified = bytes;
-            } else {
-                modified = null;
-            }
+            byte[] modified = null;
 
             int i = start;
             try {
@@ -3189,8 +3185,12 @@ public abstract class StringNodes {
                     if (lowerToUpper && StringSupport.isAsciiLowercase(b)) {
                         foundLowerCaseCharProfile.enter();
 
-                        if (!inplaceProfile.profile(inplace) && modified == null) {
-                            modified = bytes.clone();
+                        if (modified == null) {
+                            if (inplaceProfile.profile(inplace)) {
+                                modified = bytes;
+                            } else {
+                                modified = bytes.clone();
+                            }
                         }
 
                         // Convert lower-case ASCII char to upper-case.
@@ -3200,10 +3200,13 @@ public abstract class StringNodes {
                     if (upperToLower && StringSupport.isAsciiUppercase(b)) {
                         foundUpperCaseCharProfile.enter();
 
-                        if (!inplaceProfile.profile(inplace) && modified == null) {
-                            modified = bytes.clone();
+                        if (modified == null) {
+                            if (inplaceProfile.profile(inplace)) {
+                                modified = bytes;
+                            } else {
+                                modified = bytes.clone();
+                            }
                         }
-
                         // Convert upper-case ASCII char to lower-case.
                         modified[i] ^= 0x20;
                     }
@@ -3243,8 +3246,7 @@ public abstract class StringNodes {
 
         @Specialization(guards = { "isBytesMutableNode.execute(string.rope)" })
         protected Object invertMutable(RubyString string,
-                @Cached IsBytesMutableNode isBytesMutableNode,
-                @Cached BytesNode bytesNode) {
+                @Cached IsBytesMutableNode isBytesMutableNode) {
             invertNode.executeInvert(string.rope.getRawBytes(), 0, true);
             return string;
         }
@@ -3252,21 +3254,21 @@ public abstract class StringNodes {
         @Specialization(guards = { "!isBytesMutableNode.execute(string.rope)" })
         protected Object invert(RubyString string,
                 @Cached IsBytesMutableNode isBytesMutableNode,
-                @Cached BytesNode bytesNode,
+                @Cached BytesCopyNode bytesCopyNode,
                 @Cached CharacterLengthNode characterLengthNode,
                 @Cached CodeRangeNode codeRangeNode,
                 @Cached MakeMutableLeafRopeNode makeLeafRopeNode,
                 @Cached ConditionProfile noopProfile) {
             final Rope rope = string.rope;
 
-            final byte[] bytes = bytesNode.execute(rope);
-            byte[] modified = invertNode.executeInvert(bytes, 0, false);
+            final byte[] bytes = bytesCopyNode.execute(rope);
+            boolean modified = invertNode.executeInvert(bytes, 0, true) != null;
 
-            if (noopProfile.profile(modified == null)) {
+            if (noopProfile.profile(!modified)) {
                 return nil;
             } else {
                 final LeafRope newRope = makeLeafRopeNode.executeMake(
-                        modified,
+                        bytes,
                         rope.getEncoding(),
                         codeRangeNode.execute(rope),
                         characterLengthNode.execute(rope));
