@@ -1439,7 +1439,8 @@ public abstract class RopeNodes {
 
         @Specialization
         protected byte[] getBytesNative(NativeRope rope) {
-            return rope.getBytes().clone();
+            // getBytes returns a fresh byte[]
+            return rope.getBytes();
         }
     }
 
