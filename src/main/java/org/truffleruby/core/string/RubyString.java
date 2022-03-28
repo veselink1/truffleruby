@@ -49,7 +49,8 @@ public class RubyString extends RubyDynamicObject {
     }
 
     public void setRope(Rope rope, RubyEncoding encoding) {
-        assert rope.encoding == encoding.jcoding;
+        assert rope.encoding == encoding.jcoding : String
+                .format("rope: %s != string: %s", rope.encoding.toString(), encoding.jcoding.toString());
         this.rope = rope;
         this.encoding = encoding;
     }

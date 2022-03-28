@@ -5432,10 +5432,16 @@ public abstract class StringNodes {
                         "encodingsCompatible(string.getRope().getEncoding(), libOther.getRope(other).getEncoding())" })
         protected RubyString spliceExactReplace(
                 RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
+                @Cached ConditionProfile differentEncodingProfile,
                 @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
+                @Cached WithEncodingNode withEncodingNode,
                 @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
 
             Rope rope = string.getRope();
+            if (differentEncodingProfile.profile(rope.encoding != rubyEncoding.jcoding)) {
+                rope = withEncodingNode.executeWithEncoding(rope, rubyEncoding.jcoding);
+            }
+
             Rope otherRope = libOther.getRope(other);
 
             CodeRange outCodeRange = CodeRange.commonCodeRange(rope.getCodeRange(), otherRope.getCodeRange());

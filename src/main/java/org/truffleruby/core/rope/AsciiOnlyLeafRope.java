@@ -29,8 +29,15 @@ public class AsciiOnlyLeafRope extends LeafRope {
 
     @Override
     Rope withEncoding7bit(Encoding newEncoding, ConditionProfile bytesNotNull) {
-        // TODO: Do I need defensively copy here?
-        return new AsciiOnlyLeafRope(getRawBytes(), newEncoding);
+        final byte[] rawBytes = getRawBytes();
+        final boolean isReadOnly = isReadOnly();
+        if (!isReadOnly) {
+            // If the rope is mutable, it is only referenced from one string.
+            // In that case, we "move" the byte array, by setting the reference in this instance to null.
+            // This allows us to detect when this assumption is broken (the only time we see a LeafRope with null bytes).
+            this.bytes = null;
+        }
+        return new AsciiOnlyLeafRope(isReadOnly, rawBytes, newEncoding);
     }
 
     @Override

@@ -1994,22 +1994,51 @@ public abstract class RopeNodes {
         @Specialization
         protected LeafRope fromAsciiLeaf(AsciiOnlyLeafRope rope, CodeRange outCodeRange,
                 @Cached @Shared("alreadyMutableProfile") ConditionProfile alreadyMutableProfile,
-                @Cached @Shared("bytesCopyNode") BytesCopyNode bytesCopyNode) {
+                @Cached @Shared("bytesCopyNode") BytesCopyNode bytesCopyNode,
+                @Cached ConditionProfile as7BitProfile,
+                @Cached ConditionProfile asValidProfile) {
             if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
                 return rope;
             } else {
-                return new AsciiOnlyLeafRope(false, bytesCopyNode.execute(rope), rope.encoding);
+                if (as7BitProfile.profile(outCodeRange == CR_7BIT)) {
+                    return new AsciiOnlyLeafRope(false, bytesCopyNode.execute(rope), rope.encoding);
+                } else if (asValidProfile.profile(outCodeRange == CR_VALID)) {
+                    return new ValidLeafRope(false, bytesCopyNode.execute(rope), rope.encoding, rope.characterLength());
+                } else if (outCodeRange == CR_BROKEN) {
+                    return new InvalidLeafRope(
+                            false,
+                            bytesCopyNode.execute(rope),
+                            rope.encoding,
+                            rope.characterLength());
+                } else {
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    throw CompilerDirectives
+                            .shouldNotReachHere("cannot reinterpret an ascii leaf rope as " + outCodeRange.toString());
+                }
             }
         }
 
         @Specialization
         protected LeafRope fromValidleaf(ValidLeafRope rope, CodeRange outCodeRange,
                 @Cached @Shared("alreadyMutableProfile") ConditionProfile alreadyMutableProfile,
-                @Cached @Shared("bytesCopyNode") BytesCopyNode bytesCopyNode) {
+                @Cached @Shared("bytesCopyNode") BytesCopyNode bytesCopyNode,
+                @Cached ConditionProfile asValidProfile) {
             if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
                 return rope;
             } else {
-                return new ValidLeafRope(false, bytesCopyNode.execute(rope), rope.encoding, rope.characterLength());
+                if (asValidProfile.profile(outCodeRange == CR_VALID)) {
+                    return new ValidLeafRope(false, bytesCopyNode.execute(rope), rope.encoding, rope.characterLength());
+                } else if (outCodeRange == CR_BROKEN) {
+                    return new InvalidLeafRope(
+                            false,
+                            bytesCopyNode.execute(rope),
+                            rope.encoding,
+                            rope.characterLength());
+                } else {
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    throw CompilerDirectives
+                            .shouldNotReachHere("cannot reinterpret a valid leaf rope as " + outCodeRange.toString());
+                }
             }
         }
 
@@ -2020,11 +2049,17 @@ public abstract class RopeNodes {
             if (alreadyMutableProfile.profile(!rope.isReadOnly())) {
                 return rope;
             } else {
-                return new InvalidLeafRope(
-                        false,
-                        bytesCopyNode.execute(rope),
-                        rope.encoding,
-                        rope.characterLength());
+                if (outCodeRange == CR_BROKEN) {
+                    return new InvalidLeafRope(
+                            false,
+                            bytesCopyNode.execute(rope),
+                            rope.encoding,
+                            rope.characterLength());
+                } else {
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    throw CompilerDirectives.shouldNotReachHere(
+                            "cannot reinterpret an invalid leaf rope as " + outCodeRange.toString());
+                }
             }
         }
 
@@ -2048,6 +2083,10 @@ public abstract class RopeNodes {
 
         protected static boolean isLeafNode(Rope rope) {
             return rope instanceof LeafRope;
+        }
+
+        protected static boolean codeRangeIs(Rope rope, CodeRange codeRange) {
+            return rope.getCodeRange() == codeRange;
         }
 
         protected static boolean is7Bit(CodeRange codeRange) {
