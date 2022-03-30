@@ -15,14 +15,23 @@ public abstract class LeafRope extends ManagedRope implements MutableRope {
 
     private volatile boolean isReadOnly;
 
-    protected LeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding, CodeRange codeRange, int characterLength) {
-        super(encoding, codeRange, bytes.length, characterLength, bytes);
+    protected LeafRope(
+            boolean isReadOnly,
+            byte[] bytes,
+            Encoding encoding,
+            CodeRange codeRange,
+            int byteLength,
+            int characterLength) {
+        super(encoding, codeRange, byteLength, characterLength, bytes);
         this.isReadOnly = isReadOnly;
+
+        assert !isReadOnly ||
+                bytes.length == byteLength : "Read-only ropes cannot have an over-allocated internal buffer.";
     }
 
     @Override
     public byte getByteSlow(int index) {
-        return getRawBytes()[index];
+        return getRawBytesUnsafe()[index];
     }
 
     public final boolean isReadOnly() {

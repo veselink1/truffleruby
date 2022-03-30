@@ -1066,7 +1066,7 @@ public class TruffleRegexpNodes {
 
         private void record(Rope rope, RubyEncoding encoding) {
             ConcurrentOperations
-                    .getOrCompute(byteArrayPopulatedFrequencies, rope.getRawBytes() != null, x -> new AtomicLong())
+                    .getOrCompute(byteArrayPopulatedFrequencies, rope.hasRawBytes(), x -> new AtomicLong())
                     .incrementAndGet();
             ConcurrentOperations
                     .getOrCompute(byteLengthFrequencies, rope.byteLength(), x -> new AtomicLong())

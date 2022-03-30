@@ -5550,14 +5550,27 @@ public abstract class StringNodes {
 
         @Specialization(guards = "libOther.isRubyString(other)")
         protected RubyString stringByteAppend(RubyString string, Object other,
-                @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
+                @CachedLibrary(limit = "2") RubyStringLibrary libOther,
+                @Cached ConditionProfile isMutableProfile,
+                @Cached RopeNodes.IsBytesMutableNode isBytesMutableNode,
+                @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
+                @Cached RopeNodes.AppendMutableNode appendMutableNode) {
             final Rope left = string.rope;
             final Rope right = libOther.getRope(other);
 
-            // The semantics of this primitive are such that the original string's byte[] should be extended without
-            // negotiating the encoding.
-            string.setRope(concatNode.executeConcat(left, right, left.getEncoding()));
-            return string;
+            if (isMutableProfile.profile(isBytesMutableNode.execute(left))) {
+                LeafRope result = getMutableRopeNode.execute(
+                        left,
+                        CodeRange.commonCodeRange(left.getCodeRange(), right.getCodeRange()));
+
+                appendMutableNode.execute(result, right);
+                string.setRope(result);
+                return string;
+            } else {
+                final Rope result = concatNode.executeConcat(left, right, left.getEncoding());
+                string.setRope(result);
+                return string;
+            }
         }
 
     }
@@ -5833,14 +5846,29 @@ public abstract class StringNodes {
         @Specialization(guards = "libOther.isRubyString(other)")
         protected Pair<Rope, RubyEncoding> stringAppend(Object string, Object other,
                 @CachedLibrary(limit = "2") RubyStringLibrary libString,
-                @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
+                @CachedLibrary(limit = "2") RubyStringLibrary libOther,
+                @Cached WithEncodingNode withEncodingNode,
+                @Cached ConditionProfile isMutableProfile,
+                @Cached RopeNodes.IsBytesMutableNode isBytesMutableNode,
+                @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
+                @Cached RopeNodes.AppendMutableNode appendMutableNode) {
             final Rope left = libString.getRope(string);
             final Rope right = libOther.getRope(other);
 
             final RubyEncoding compatibleEncoding = executeCheckEncoding(string, other);
+            final Rope leftWithEncoding = withEncodingNode.executeWithEncoding(left, compatibleEncoding.jcoding);
 
-            final Rope result = executeConcat(left, right, compatibleEncoding);
-            return Pair.create(result, compatibleEncoding);
+            if (isMutableProfile.profile(isBytesMutableNode.execute(left))) {
+                LeafRope result = getMutableRopeNode.execute(
+                        leftWithEncoding,
+                        CodeRange.commonCodeRange(leftWithEncoding.getCodeRange(), leftWithEncoding.getCodeRange()));
+
+                appendMutableNode.execute(result, right);
+                return Pair.create(result, compatibleEncoding);
+            } else {
+                final Rope result = executeConcat(left, right, compatibleEncoding);
+                return Pair.create(result, compatibleEncoding);
+            }
         }
 
         private Rope executeConcat(Rope left, Rope right, RubyEncoding compatibleEncoding) {
@@ -5904,6 +5932,25 @@ public abstract class StringNodes {
                 @Cached FlattenNode flattenNode) {
             final Rope flattened = flattenNode.executeFlatten(string.rope);
             return getLanguage().getFrozenStringLiteral(flattened);
+        }
+
+    }
+
+    @CoreMethod(names = "+@")
+    public abstract static class NewStringOrSelfNode extends CoreMethodArrayArgumentsNode {
+
+        @Specialization
+        protected Object execute(Object self,
+                @CachedLibrary(limit = "2") RubyStringLibrary libSelf,
+                @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
+                @Cached DispatchNode dupNode) {
+            if (libSelf.isRubyString(self)) {
+                RubyString dupped = (RubyString) dupNode.call(self, "dup");
+                dupped.setRope(getMutableRopeNode.execute(dupped.getRope(), dupped.getRope().getCodeRange()));
+                return dupped;
+            } else {
+                return self;
+            }
         }
 
     }

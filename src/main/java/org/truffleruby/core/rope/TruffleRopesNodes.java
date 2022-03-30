@@ -82,6 +82,8 @@ public abstract class TruffleRopesNodes {
             System.err.println("E = Encoding");
             System.err.println("P = Native Pointer (NativeRope only)");
             System.err.println("S = Native Size (NativeRope only)");
+            System.err.println("M = Mutable? (LeafRope only)");
+            System.err.println("S = Spare Capacity (LeafRope only)");
 
             return debugPrintRopeNode.executeDebugPrint(strings.getRope(string), 0, printString);
         }
@@ -151,7 +153,7 @@ public abstract class TruffleRopesNodes {
         @Specialization(guards = "strings.isRubyString(string)")
         protected boolean hasBytes(Object string,
                 @CachedLibrary(limit = "2") RubyStringLibrary strings) {
-            return strings.getRope(string).getRawBytes() != null;
+            return strings.getRope(string).hasRawBytes();
         }
 
     }

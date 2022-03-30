@@ -49,7 +49,7 @@ public class RepeatingRope extends ManagedRope {
 
     @Override
     protected byte[] getBytesSlow() {
-        if (child.getRawBytes() != null) {
+        if (child.hasRawBytes()) {
             final byte[] childBytes = child.getRawBytes();
             int len = childBytes.length * times;
             final byte[] ret = new byte[len];

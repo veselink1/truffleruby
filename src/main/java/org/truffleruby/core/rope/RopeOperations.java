@@ -301,7 +301,7 @@ public class RopeOperations {
      * is too deep. */
     @TruffleBoundary
     public static byte[] flattenBytes(Rope rope) {
-        if (rope.getRawBytes() != null) {
+        if (rope.hasRawBytes()) {
             return rope.getRawBytes();
         }
 
@@ -508,7 +508,7 @@ public class RopeOperations {
     @TruffleBoundary
     static byte getByteSlow(Rope rope, int index) {
         while (true) {
-            final byte[] rawBytes = rope.getRawBytes();
+            final byte[] rawBytes = rope.getRawBytesUnsafe();
             if (rawBytes != null) {
                 return rawBytes[index];
             } else if (rope instanceof ConcatRope) {

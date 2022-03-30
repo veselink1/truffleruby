@@ -24,7 +24,7 @@ public abstract class Rope implements Comparable<Rope> {
     public static final int NUMBER_OF_CONCRETE_CLASSES = 8;
 
     public final Encoding encoding;
-    private final int byteLength;
+    protected int byteLength;
     private int hashCode = 0;
     protected byte[] bytes;
 
@@ -56,7 +56,24 @@ public abstract class Rope implements Comparable<Rope> {
 
     protected abstract byte getByteSlow(int index);
 
+    public final boolean hasRawBytes() {
+        return bytes != null;
+    }
+
     public final byte[] getRawBytes() {
+        if (bytes == null) {
+            return null;
+        }
+        if (byteLength < bytes.length) {
+            byte[] truncated = new byte[byteLength];
+            System.arraycopy(bytes, 0, truncated, 0, byteLength);
+            bytes = truncated;
+            return bytes;
+        }
+        return bytes;
+    }
+
+    public final byte[] getRawBytesUnsafe() {
         return bytes;
     }
 
@@ -101,6 +118,10 @@ public abstract class Rope implements Comparable<Rope> {
 
     public final int calculatedHashCode() {
         return hashCode;
+    }
+
+    protected final void clearHashCode() {
+        hashCode = 0;
     }
 
     @TruffleBoundary

@@ -795,17 +795,19 @@ public abstract class RopeNodes {
             printPreamble(currentLevel);
 
             // Converting a rope to a java.lang.String may populate the byte[], so we need to query for the array status beforehand.
-            final boolean bytesAreNull = rope.getRawBytes() == null;
+            final boolean bytesAreNull = !rope.hasRawBytes();
 
             System.err.println(String.format(
-                    "%s (%s; BN: %b; BL: %d; CL: %d; CR: %s; E: %s)",
+                    "%s (%s; BN: %b; BL: %d; CL: %d; CR: %s; E: %s, M: %B, S: %S)",
                     printString ? RopeOperations.escape(rope) : "<skipped>",
                     rope.getClass().getSimpleName(),
                     bytesAreNull,
                     rope.byteLength(),
                     rope.characterLength(),
                     rope.getCodeRange(),
-                    rope.getEncoding()));
+                    rope.getEncoding(),
+                    !rope.isReadOnly(),
+                    rope.getRawBytesUnsafe().length - rope.byteLength()));
 
             return nil;
         }
@@ -816,7 +818,7 @@ public abstract class RopeNodes {
             printPreamble(currentLevel);
 
             // Converting a rope to a java.lang.String may populate the byte[], so we need to query for the array status beforehand.
-            final boolean bytesAreNull = rope.getRawBytes() == null;
+            final boolean bytesAreNull = !rope.hasRawBytes();
 
             System.err.println(String.format(
                     "%s (%s; BN: %b; BL: %d; CL: %d; CR: %s; O: %d; E: %s)",
@@ -842,7 +844,7 @@ public abstract class RopeNodes {
             final ConcatState state = rope.getState();
 
             // Before the print, as `toString()` may cause the bytes to become populated.
-            final boolean bytesAreNull = rope.getRawBytes() == null;
+            final boolean bytesAreNull = !rope.hasRawBytes();
 
             if (state.isFlattened()) {
                 System.err.println(String.format(
@@ -878,7 +880,7 @@ public abstract class RopeNodes {
             printPreamble(currentLevel);
 
             // Converting a rope to a java.lang.String may populate the byte[], so we need to query for the array status beforehand.
-            final boolean bytesAreNull = rope.getRawBytes() == null;
+            final boolean bytesAreNull = !rope.hasRawBytes();
 
             System.err.println(String.format(
                     "%s (%s; BN: %b; BL: %d; CL: %d; CR: %s; T: %d; E: %s)",
@@ -902,7 +904,7 @@ public abstract class RopeNodes {
             printPreamble(currentLevel);
 
             // Converting a rope to a java.lang.String may populate the byte[], so we need to query for the array status beforehand.
-            final boolean bytesAreNull = rope.getRawBytes() == null;
+            final boolean bytesAreNull = !rope.hasRawBytes();
 
             System.err.println(String.format(
                     "%s (%s; BN: %b; BL: %d; CL: %d; CR: %s; V: %d, E: %s)",
@@ -1025,42 +1027,42 @@ public abstract class RopeNodes {
 
         public abstract int executeGetByte(Rope rope, int index);
 
-        @Specialization(guards = "rope.getRawBytes() != null")
+        @Specialization(guards = "rope.hasRawBytes()")
         protected int getByte(Rope rope, int index) {
-            return rope.getRawBytes()[index] & 0xff;
+            return rope.getRawBytesUnsafe()[index] & 0xff;
         }
 
-        @Specialization(guards = "rope.getRawBytes() == null")
+        @Specialization(guards = "!rope.hasRawBytes()")
         protected int getByte(NativeRope rope, int index) {
             return rope.get(index) & 0xff;
         }
 
         @TruffleBoundary
-        @Specialization(guards = "rope.getRawBytes() == null")
+        @Specialization(guards = "!rope.hasRawBytes()")
         protected int getByte(LazyIntRope rope, int index) {
             return rope.getBytes()[index] & 0xff;
         }
 
-        @Specialization(guards = "rope.getRawBytes() == null")
+        @Specialization(guards = "!rope.hasRawBytes()")
         protected int getByteSubstringRope(SubstringRope rope, int index,
                 @Cached ConditionProfile childRawBytesNullProfile,
                 @Cached ByteSlowNode slowByte) {
-            if (childRawBytesNullProfile.profile(rope.getChild().getRawBytes() == null)) {
+            if (childRawBytesNullProfile.profile(!rope.getChild().hasRawBytes())) {
                 return slowByte.execute(rope, index) & 0xff;
             }
 
-            return rope.getChild().getRawBytes()[index + rope.getByteOffset()] & 0xff;
+            return rope.getChild().getRawBytesUnsafe()[index + rope.getByteOffset()] & 0xff;
         }
 
-        @Specialization(guards = "rope.getRawBytes() == null")
+        @Specialization(guards = "!rope.hasRawBytes()")
         protected int getByteRepeatingRope(RepeatingRope rope, int index,
                 @Cached ConditionProfile childRawBytesNullProfile,
                 @Cached ByteSlowNode slowByte) {
-            if (childRawBytesNullProfile.profile(rope.getChild().getRawBytes() == null)) {
+            if (childRawBytesNullProfile.profile(!rope.getChild().hasRawBytes())) {
                 return slowByte.execute(rope, index) & 0xff;
             }
 
-            return rope.getChild().getRawBytes()[index % rope.getChild().byteLength()] & 0xff;
+            return rope.getChild().getRawBytesUnsafe()[index % rope.getChild().byteLength()] & 0xff;
         }
 
         // NOTE(norswap, 12 Jan 2021): The order of the two next specialization is significant.
@@ -1078,18 +1080,18 @@ public abstract class RopeNodes {
                 @Cached ByteSlowNode byteSlowLeft,
                 @Cached ByteSlowNode byteSlowRight) {
             if (chooseLeftChildProfile.profile(index < state.left.byteLength())) {
-                if (leftChildRawBytesNullProfile.profile(state.left.getRawBytes() == null)) {
+                if (leftChildRawBytesNullProfile.profile(!state.left.hasRawBytes())) {
                     return byteSlowLeft.execute(state.left, index) & 0xff;
                 }
 
-                return state.left.getRawBytes()[index] & 0xff;
+                return state.left.getRawBytesUnsafe()[index] & 0xff;
             }
 
-            if (rightChildRawBytesNullProfile.profile(state.right.getRawBytes() == null)) {
+            if (rightChildRawBytesNullProfile.profile(!state.right.hasRawBytes())) {
                 return byteSlowRight.execute(state.right, index - state.left.byteLength()) & 0xff;
             }
 
-            return state.right.getRawBytes()[index - state.left.byteLength()] & 0xff;
+            return state.right.getRawBytesUnsafe()[index - state.left.byteLength()] & 0xff;
         }
 
         // Necessary because getRawBytes() might return null, but then be populated and the children nulled
@@ -1251,13 +1253,13 @@ public abstract class RopeNodes {
             return nativeToManagedNode.execute(rope);
         }
 
-        @Specialization(guards = { "!isLeafRope(rope)", "rope.getRawBytes() != null" })
+        @Specialization(guards = { "!isLeafRope(rope)", "rope.hasRawBytes()" })
         protected LeafRope flattenNonLeafWithBytes(ManagedRope rope) {
             return makeLeafRopeNode
                     .executeMake(rope.getRawBytes(), rope.getEncoding(), rope.getCodeRange(), rope.characterLength());
         }
 
-        @Specialization(guards = { "!isLeafRope(rope)", "rope.getRawBytes() == null" })
+        @Specialization(guards = { "!isLeafRope(rope)", "!rope.hasRawBytes()" })
         protected LeafRope flatten(ManagedRope rope) {
             // NB: We call RopeOperations.flatten here rather than Rope#getBytes so we don't populate the byte[] in
             // the source `rope`. Otherwise, we'll end up a fully populated reference in both the source `rope` and the
@@ -1320,7 +1322,7 @@ public abstract class RopeNodes {
             return equal;
         }
 
-        @Specialization(guards = { "a != b", "a.getRawBytes() != null", "a.getRawBytes() == b.getRawBytes()" })
+        @Specialization(guards = { "a != b", "a.hasRawBytes()", "a.getRawBytesUnsafe() == b.getRawBytesUnsafe()" })
         protected boolean sameByteArrays(Rope a, Rope b) {
             return true;
         }
@@ -1328,12 +1330,12 @@ public abstract class RopeNodes {
         @Specialization(
                 guards = {
                         "a != b",
-                        "a.getRawBytes() != null",
-                        "b.getRawBytes() != null",
+                        "a.hasRawBytes()",
+                        "b.hasRawBytes()",
                         "a.byteLength() == 1",
                         "b.byteLength() == 1" })
         protected boolean characterEqual(Rope a, Rope b) {
-            return a.getRawBytes()[0] == b.getRawBytes()[0];
+            return a.getRawBytesUnsafe()[0] == b.getRawBytesUnsafe()[0];
         }
 
         @Specialization(guards = "a != b", replaces = { "cachedRopes", "sameByteArrays", "characterEqual" })
@@ -1346,7 +1348,7 @@ public abstract class RopeNodes {
                 @Cached ConditionProfile differentHashProfile,
                 @Cached BytesNode aBytesNode,
                 @Cached BytesNode bBytesNode) {
-            if (aRawBytesProfile.profile(a.getRawBytes() != null) && a.getRawBytes() == b.getRawBytes()) {
+            if (aRawBytesProfile.profile(a.hasRawBytes()) && a.getRawBytesUnsafe() == b.getRawBytesUnsafe()) {
                 sameByteArraysProfile.enter();
                 return true;
             }
@@ -1397,13 +1399,13 @@ public abstract class RopeNodes {
 
         public abstract byte[] execute(Rope rope);
 
-        @Specialization(guards = "rope.getRawBytes() != null")
+        @Specialization(guards = "rope.hasRawBytes()")
         protected byte[] getBytesManaged(ManagedRope rope) {
             return rope.getRawBytes();
         }
 
         @TruffleBoundary
-        @Specialization(guards = "rope.getRawBytes() == null")
+        @Specialization(guards = "!rope.hasRawBytes()")
         protected byte[] getBytesManagedAndFlatten(ManagedRope rope) {
             return rope.getBytes();
         }
@@ -1425,13 +1427,13 @@ public abstract class RopeNodes {
 
         public abstract byte[] execute(Rope rope);
 
-        @Specialization(guards = "rope.getRawBytes() != null")
+        @Specialization(guards = "rope.hasRawBytes()")
         protected byte[] getBytesManaged(ManagedRope rope) {
             return rope.getRawBytes().clone();
         }
 
         @TruffleBoundary
-        @Specialization(guards = "rope.getRawBytes() == null")
+        @Specialization(guards = "!rope.hasRawBytes()")
         protected byte[] getBytesManagedAndFlatten(ManagedRope rope) {
             // getBytesSlow allocates a new byte[] buffer, so we don't need to clone() it.
             return rope.getBytesSlow();
@@ -1459,9 +1461,9 @@ public abstract class RopeNodes {
             return childNode.execute(rope.getChild(), rope.getByteOffset() + index);
         }
 
-        @Specialization(guards = "rope.getRawBytes() != null")
+        @Specialization(guards = "rope.hasRawBytes()")
         protected byte fastByte(ManagedRope rope, int index) {
-            return rope.getRawBytes()[index];
+            return rope.getRawBytesUnsafe()[index];
         }
 
         @Specialization
@@ -1470,7 +1472,7 @@ public abstract class RopeNodes {
         }
 
         @TruffleBoundary
-        @Specialization(guards = "rope.getRawBytes() == null")
+        @Specialization(guards = "!rope.hasRawBytes()")
         protected byte getByteFromRope(ManagedRope rope, int index) {
             return rope.getByteSlow(index);
         }
@@ -1905,24 +1907,24 @@ public abstract class RopeNodes {
             return execute(rope, start, Math.min(rope.byteLength(), end) - start);
         }
 
-        @Specialization(guards = "rope.getRawBytes() != null")
+        @Specialization(guards = "rope.hasRawBytes()")
         protected Bytes getBytesObjectFromRaw(Rope rope, int offset, int length) {
-            return new Bytes(rope.getRawBytes(), offset, length);
+            return new Bytes(rope.getRawBytesUnsafe(), offset, length);
         }
 
-        @Specialization(guards = "rope.getRawBytes() == null")
+        @Specialization(guards = "!rope.hasRawBytes()")
         protected Bytes getBytesObject(SubstringRope rope, int offset, int length,
                 @Cached @Shared("bytes") BytesNode bytes) {
             return new Bytes(bytes.execute(rope.getChild()), rope.getByteOffset() + offset, length);
         }
 
-        @Specialization(guards = { "rope.getRawBytes() == null", "!isSubstringRope(rope)" })
+        @Specialization(guards = { "!rope.hasRawBytes()", "!isSubstringRope(rope)" })
         protected Bytes getBytesObject(ManagedRope rope, int offset, int length,
                 @Cached @Shared("bytes") BytesNode bytes) {
             return new Bytes(bytes.execute(rope), offset, length);
         }
 
-        @Specialization(guards = "rope.getRawBytes() == null")
+        @Specialization(guards = "!rope.hasRawBytes()")
         protected Bytes getBytesObject(NativeRope rope, int offset, int length) {
             return new Bytes(rope.getBytes(offset, length));
         }
@@ -2103,6 +2105,41 @@ public abstract class RopeNodes {
 
         protected static boolean isUnknown(CodeRange codeRange) {
             return codeRange == CR_UNKNOWN;
+        }
+    }
+
+    public abstract static class AppendMutableNode extends RubyBaseNode {
+
+        public abstract void execute(LeafRope rope, Rope other);
+
+        @Specialization
+        protected void ropeAppend(LeafRope rope, Rope other,
+                @Cached BytesNode bytesNode) {
+            assert !rope.isReadOnly() : "Rope not mutable!";
+
+            final int newCharacterLength = rope.characterLength() + other.characterLength();
+            final byte[] srcBytes = bytesNode.execute(other);
+            final byte[] buffer = rope.bytes;
+            final int length = rope.byteLength();
+            final int capacity = buffer.length;
+            final int newLength = length + srcBytes.length;
+
+            if (capacity - length < srcBytes.length) {
+                // There is not enough space
+                int newCapacity = Math.max(16, newLength * 2);
+                byte[] newBuffer = new byte[newCapacity];
+
+                System.arraycopy(rope.bytes, 0, newBuffer, 0, length);
+                System.arraycopy(srcBytes, 0, newBuffer, length, srcBytes.length);
+                rope.bytes = newBuffer;
+            } else {
+                // There is enough space, so we don't need to reallocate
+                System.arraycopy(srcBytes, 0, rope.bytes, length, srcBytes.length);
+            }
+
+            rope.byteLength = newLength;
+            rope.characterLength = newCharacterLength;
+            rope.clearHashCode();
         }
     }
 }

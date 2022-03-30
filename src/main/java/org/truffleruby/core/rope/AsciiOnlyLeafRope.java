@@ -18,26 +18,30 @@ import com.oracle.truffle.api.CompilerDirectives;
 public class AsciiOnlyLeafRope extends LeafRope {
 
     public AsciiOnlyLeafRope(byte[] bytes, Encoding encoding) {
-        this(true, bytes, encoding);
+        this(true, bytes, encoding, bytes.length);
     }
 
     AsciiOnlyLeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding) {
-        super(isReadOnly, bytes, encoding, CodeRange.CR_7BIT, bytes.length);
+        this(isReadOnly, bytes, encoding, bytes.length);
+    }
+
+    private AsciiOnlyLeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding, int byteLength) {
+        super(isReadOnly, bytes, encoding, CodeRange.CR_7BIT, byteLength, byteLength);
 
         assert RopeOperations.isAsciiOnly(bytes, encoding) : "MBC string incorrectly marked as CR_7BIT";
     }
 
     @Override
     Rope withEncoding7bit(Encoding newEncoding, ConditionProfile bytesNotNull) {
-        final byte[] rawBytes = getRawBytes();
+        final byte[] rawBytes = bytes;
         final boolean isReadOnly = isReadOnly();
         if (!isReadOnly) {
             // If the rope is mutable, it is only referenced from one string.
             // In that case, we "move" the byte array, by setting the reference in this instance to null.
             // This allows us to detect when this assumption is broken (the only time we see a LeafRope with null bytes).
-            this.bytes = null;
+            bytes = null;
         }
-        return new AsciiOnlyLeafRope(isReadOnly, rawBytes, newEncoding);
+        return new AsciiOnlyLeafRope(isReadOnly, rawBytes, newEncoding, byteLength);
     }
 
     @Override

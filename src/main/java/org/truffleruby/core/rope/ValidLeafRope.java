@@ -23,7 +23,11 @@ public class ValidLeafRope extends LeafRope {
     }
 
     ValidLeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding, int characterLength) {
-        super(isReadOnly, bytes, encoding, CodeRange.CR_VALID, characterLength);
+        this(isReadOnly, bytes, encoding, bytes.length, characterLength);
+    }
+
+    private ValidLeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding, int byteLength, int characterLength) {
+        super(isReadOnly, bytes, encoding, CodeRange.CR_VALID, byteLength, characterLength);
 
         // It makes sense to use a ValidLeafRope node with ASCII-compatible encoding
         // with code range set to CR_VALID even if the actual code range is CR_7BIT,
@@ -41,13 +45,13 @@ public class ValidLeafRope extends LeafRope {
 
     @Override
     Rope withBinaryEncoding(ConditionProfile bytesNotNull) {
-        final byte[] rawBytes = getRawBytes();
+        final byte[] rawBytes = bytes;
         final boolean isReadOnly = isReadOnly();
         if (!isReadOnly) {
             // If the rope is mutable, it is only referenced from one string.
             // In that case, we "move" the byte array, by setting the reference in this instance to null.
             // This allows us to detect when this assumption is broken (the only time we see a LeafRope with null bytes).
-            this.bytes = null;
+            bytes = null;
         }
         return new ValidLeafRope(isReadOnly, rawBytes, ASCIIEncoding.INSTANCE, byteLength());
     }

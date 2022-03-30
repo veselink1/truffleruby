@@ -15,7 +15,7 @@ import org.jcodings.Encoding;
 public abstract class ManagedRope extends Rope {
 
     protected CodeRange codeRange;
-    private final int characterLength;
+    protected int characterLength;
 
     protected ManagedRope(
             Encoding encoding,

@@ -1433,10 +1433,6 @@ class String
     end
   end
 
-  def +@
-    frozen? ? dup : self
-  end
-
   def -@
     str = frozen? ? self : dup.freeze
     if Primitive.string_interned?(self)

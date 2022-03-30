@@ -22,7 +22,7 @@ public class InvalidLeafRope extends LeafRope {
     }
 
     InvalidLeafRope(boolean isReadOnly, byte[] bytes, Encoding encoding, int characterLength) {
-        super(isReadOnly, bytes, encoding, CodeRange.CR_BROKEN, characterLength);
+        super(isReadOnly, bytes, encoding, CodeRange.CR_BROKEN, bytes.length, characterLength);
 
         // It makes sense to use an InvalidLeafRope node with code range set to
         // CR_BROKEN even if the actual code range is valid, but only when the

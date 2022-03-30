@@ -74,7 +74,7 @@ public class SubstringRope extends ManagedRope {
 
     @Override
     protected byte[] getBytesSlow() {
-        if (child.getRawBytes() != null) {
+        if (child.hasRawBytes()) {
             final byte[] bytes = new byte[byteLength()];
             System.arraycopy(child.getRawBytes(), byteOffset, bytes, 0, byteLength());
             return bytes;
