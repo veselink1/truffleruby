@@ -46,16 +46,4 @@ public abstract class LeafRope extends ManagedRope implements MutableRope {
         assert !isReadOnly() : this.getClass() + " not mutable!";
         bytes[index] = b;
     }
-
-    public void replaceRange(int spliceByteIndex, byte[] srcBytes, CodeRange srcCodeRange) {
-        assert getCodeRange() == CodeRange.commonCodeRange(getCodeRange(), srcCodeRange) : "Cannot replace " +
-                getCodeRange() + " bytes with " + srcCodeRange + "!";
-        assert !isReadOnly() : this.getClass() + " not mutable!";
-
-        if (srcBytes.length == 1) {
-            bytes[spliceByteIndex] = srcBytes[0];
-        } else {
-            System.arraycopy(srcBytes, 0, this.bytes, spliceByteIndex, srcBytes.length);
-        }
-    }
 }

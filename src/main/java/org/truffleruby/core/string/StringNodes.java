@@ -167,7 +167,6 @@ import org.truffleruby.core.rope.RopeNodes.GetByteNode;
 import org.truffleruby.core.rope.RopeNodes.GetBytesObjectNode;
 import org.truffleruby.core.rope.RopeNodes.GetCodePointNode;
 import org.truffleruby.core.rope.RopeNodes.MakeLeafRopeNode;
-import org.truffleruby.core.rope.RopeNodes.MakeMutableLeafRopeNode;
 import org.truffleruby.core.rope.RopeNodes.RepeatNode;
 import org.truffleruby.core.rope.RopeNodes.SingleByteOptimizableNode;
 import org.truffleruby.core.rope.RopeNodes.SubstringNode;
@@ -1342,7 +1341,7 @@ public abstract class StringNodes {
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
                 @Cached CharacterLengthNode characterLengthNode,
                 @Cached @Shared("codeRangeNode") CodeRangeNode codeRangeNode,
-                @Cached @Shared("makeLeafRopeNode") MakeMutableLeafRopeNode makeLeafRopeNode,
+                @Cached("makeMutable()") @Shared("makeLeafRopeNode") MakeLeafRopeNode makeLeafRopeNode,
                 @Cached @Shared("dummyEncodingProfile") ConditionProfile dummyEncodingProfile,
                 @Cached @Shared("modifiedProfile") ConditionProfile modifiedProfile) {
             final Rope rope = string.rope;
@@ -1371,7 +1370,7 @@ public abstract class StringNodes {
         protected Object downcaseMultiByteComplex(RubyString string, int caseMappingOptions,
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
                 @Cached @Shared("codeRangeNode") CodeRangeNode codeRangeNode,
-                @Cached @Shared("makeLeafRopeNode") MakeMutableLeafRopeNode makeLeafRopeNode,
+                @Cached("makeMutable()") @Shared("makeLeafRopeNode") MakeLeafRopeNode makeLeafRopeNode,
                 @Cached @Shared("dummyEncodingProfile") ConditionProfile dummyEncodingProfile,
                 @Cached @Shared("modifiedProfile") ConditionProfile modifiedProfile) {
             final Rope rope = string.rope;
@@ -2133,7 +2132,7 @@ public abstract class StringNodes {
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
                 @Cached CharacterLengthNode characterLengthNode,
                 @Cached @Shared("codeRangeNode") CodeRangeNode codeRangeNode,
-                @Cached @Shared("makeLeafRopeNode") MakeMutableLeafRopeNode makeLeafRopeNode,
+                @Cached("makeMutable()") @Shared("makeLeafRopeNode") MakeLeafRopeNode makeLeafRopeNode,
                 @Cached @Shared("dummyEncodingProfile") ConditionProfile dummyEncodingProfile,
                 @Cached @Shared("modifiedProfile") ConditionProfile modifiedProfile) {
             // Taken from org.jruby.RubyString#swapcase_bang19.
@@ -2164,7 +2163,7 @@ public abstract class StringNodes {
         protected Object swapcaseMultiByteComplex(RubyString string, int caseMappingOptions,
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
                 @Cached @Shared("codeRangeNode") CodeRangeNode codeRangeNode,
-                @Cached @Shared("makeLeafRopeNode") MakeMutableLeafRopeNode makeLeafRopeNode,
+                @Cached("makeMutable()") @Shared("makeLeafRopeNode") MakeLeafRopeNode makeLeafRopeNode,
                 @Cached @Shared("dummyEncodingProfile") ConditionProfile dummyEncodingProfile,
                 @Cached @Shared("modifiedProfile") ConditionProfile modifiedProfile) {
             // Taken from org.jruby.RubyString#swapcase_bang19.
@@ -2685,7 +2684,7 @@ public abstract class StringNodes {
     @CoreMethod(names = "succ!", raiseIfFrozenSelf = true)
     public abstract static class SuccBangNode extends CoreMethodArrayArgumentsNode {
 
-        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeMutableLeafRopeNode.create();
+        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeLeafRopeNode.makeMutable();
 
         @Specialization
         protected RubyString succBang(RubyString string) {
@@ -2852,7 +2851,7 @@ public abstract class StringNodes {
     public abstract static class ReverseBangNode extends CoreMethodArrayArgumentsNode {
 
         @Child CharacterLengthNode characterLengthNode = CharacterLengthNode.create();
-        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeMutableLeafRopeNode.create();
+        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeLeafRopeNode.makeMutable();
 
         @Specialization(guards = "reverseIsEqualToSelf(string, characterLengthNode)")
         protected RubyString reverseNoOp(RubyString string) {
@@ -3257,7 +3256,7 @@ public abstract class StringNodes {
                 @Cached BytesCopyNode bytesCopyNode,
                 @Cached CharacterLengthNode characterLengthNode,
                 @Cached CodeRangeNode codeRangeNode,
-                @Cached MakeMutableLeafRopeNode makeLeafRopeNode,
+                @Cached("makeMutable()") MakeLeafRopeNode makeLeafRopeNode,
                 @Cached ConditionProfile noopProfile) {
             final Rope rope = string.rope;
 
@@ -3299,7 +3298,7 @@ public abstract class StringNodes {
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
                 @Cached CharacterLengthNode characterLengthNode,
                 @Cached @Shared("codeRangeNode") CodeRangeNode codeRangeNode,
-                @Cached @Shared("makeLeafRopeNode") MakeMutableLeafRopeNode makeLeafRopeNode,
+                @Cached("makeMutable()") @Shared("makeLeafRopeNode") MakeLeafRopeNode makeLeafRopeNode,
                 @Cached @Shared("dummyEncodingProfile") ConditionProfile dummyEncodingProfile,
                 @Cached @Shared("modifiedProfile") ConditionProfile modifiedProfile) {
             final Rope rope = string.rope;
@@ -3329,7 +3328,7 @@ public abstract class StringNodes {
         protected Object upcaseMultiByteComplex(RubyString string, int caseMappingOptions,
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
                 @Cached @Shared("codeRangeNode") CodeRangeNode codeRangeNode,
-                @Cached @Shared("makeLeafRopeNode") MakeMutableLeafRopeNode makeLeafRopeNode,
+                @Cached("makeMutable()") @Shared("makeLeafRopeNode") MakeLeafRopeNode makeLeafRopeNode,
                 @Cached @Shared("dummyEncodingProfile") ConditionProfile dummyEncodingProfile,
                 @Cached @Shared("modifiedProfile") ConditionProfile modifiedProfile) {
             final Rope rope = string.rope;
@@ -3378,7 +3377,7 @@ public abstract class StringNodes {
         @Child private BytesNode bytesNode = BytesNode.create();
         @Child private CodeRangeNode codeRangeNode = CodeRangeNode.create();
         @Child private CharacterLengthNode characterLengthNode = CharacterLengthNode.create();
-        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeMutableLeafRopeNode.create();
+        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeLeafRopeNode.makeMutable();
         @Child SingleByteOptimizableNode singleByteOptimizableNode = SingleByteOptimizableNode
                 .create();
 
@@ -5140,7 +5139,7 @@ public abstract class StringNodes {
     @CoreMethod(names = "pattern", constructor = true, required = 2, lowerFixnum = { 1, 2 })
     public abstract static class StringPatternPrimitiveNode extends CoreMethodArrayArgumentsNode {
 
-        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeMutableLeafRopeNode.create();
+        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeLeafRopeNode.makeMutable();
         @Child private RepeatNode repeatNode = RepeatNode.create();
 
         @Specialization(guards = "pattern >= 0")
@@ -5433,6 +5432,8 @@ public abstract class StringNodes {
         protected RubyString spliceExactReplace(
                 RubyString string, Object other, int spliceByteIndex, int byteCountToReplace, RubyEncoding rubyEncoding,
                 @Cached ConditionProfile differentEncodingProfile,
+                @Cached ConditionProfile isSingleByteReplaceProfile,
+                @Cached RopeNodes.CommonCodeRangeNode commonCodeRangeNode,
                 @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
                 @Cached WithEncodingNode withEncodingNode,
                 @CachedLibrary(limit = "2") RubyStringLibrary libOther) {
@@ -5444,12 +5445,19 @@ public abstract class StringNodes {
 
             Rope otherRope = libOther.getRope(other);
 
-            CodeRange outCodeRange = CodeRange.commonCodeRange(rope.getCodeRange(), otherRope.getCodeRange());
+            CodeRange outCodeRange = commonCodeRangeNode.execute(rope.getCodeRange(), otherRope.getCodeRange());
             LeafRope newRope = getMutableRopeNode.execute(rope, outCodeRange);
 
-            newRope.replaceRange(spliceByteIndex, otherRope.getBytes(), otherRope.getCodeRange());
-            string.setRope(newRope, rubyEncoding);
+            final byte[] destBytes = newRope.getRawBytesUnsafe();
+            final byte[] srcBytes = otherRope.getBytes();
 
+            if (isSingleByteReplaceProfile.profile(srcBytes.length == 1)) {
+                destBytes[spliceByteIndex] = srcBytes[0];
+            } else {
+                System.arraycopy(srcBytes, 0, destBytes, spliceByteIndex, srcBytes.length);
+            }
+
+            string.setRope(newRope, rubyEncoding);
             return string;
         }
     }
@@ -5552,6 +5560,7 @@ public abstract class StringNodes {
         protected RubyString stringByteAppend(RubyString string, Object other,
                 @CachedLibrary(limit = "2") RubyStringLibrary libOther,
                 @Cached ConditionProfile isMutableProfile,
+                @Cached RopeNodes.CommonCodeRangeNode commonCodeRangeNode,
                 @Cached RopeNodes.IsBytesMutableNode isBytesMutableNode,
                 @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
                 @Cached RopeNodes.AppendMutableNode appendMutableNode) {
@@ -5561,7 +5570,7 @@ public abstract class StringNodes {
             if (isMutableProfile.profile(isBytesMutableNode.execute(left))) {
                 LeafRope result = getMutableRopeNode.execute(
                         left,
-                        CodeRange.commonCodeRange(left.getCodeRange(), right.getCodeRange()));
+                        commonCodeRangeNode.execute(left.getCodeRange(), right.getCodeRange()));
 
                 appendMutableNode.execute(result, right);
                 string.setRope(result);
@@ -5849,6 +5858,7 @@ public abstract class StringNodes {
                 @CachedLibrary(limit = "2") RubyStringLibrary libOther,
                 @Cached WithEncodingNode withEncodingNode,
                 @Cached ConditionProfile isMutableProfile,
+                @Cached RopeNodes.CommonCodeRangeNode commonCodeRangeNode,
                 @Cached RopeNodes.IsBytesMutableNode isBytesMutableNode,
                 @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
                 @Cached RopeNodes.AppendMutableNode appendMutableNode) {
@@ -5861,7 +5871,7 @@ public abstract class StringNodes {
             if (isMutableProfile.profile(isBytesMutableNode.execute(left))) {
                 LeafRope result = getMutableRopeNode.execute(
                         leftWithEncoding,
-                        CodeRange.commonCodeRange(leftWithEncoding.getCodeRange(), leftWithEncoding.getCodeRange()));
+                        commonCodeRangeNode.execute(leftWithEncoding.getCodeRange(), right.getCodeRange()));
 
                 appendMutableNode.execute(result, right);
                 return Pair.create(result, compatibleEncoding);
@@ -5942,18 +5952,22 @@ public abstract class StringNodes {
         @Specialization
         protected Object execute(Object self,
                 @CachedLibrary(limit = "2") RubyStringLibrary libSelf,
-                @Cached MakeMutableLeafRopeNode makeMutableLeafRopeNode,
+                @Cached IsBytesMutableNode isBytesMutableNode,
+                @Cached BranchProfile isBytesMutableProfile,
+                @Cached("makeMutable()") MakeLeafRopeNode makeLeafRopeNode,
                 @Cached BytesCopyNode bytesCopyNode,
                 @Cached DispatchNode dupNode) {
             if (libSelf.isRubyString(self)) {
                 RubyString dupped = (RubyString) dupNode.call(self, "dup");
                 final Rope rope = dupped.getRope();
-                final Rope duppedRope = makeMutableLeafRopeNode.executeMake(
-                        bytesCopyNode.execute(rope),
-                        rope.getEncoding(),
-                        rope.getCodeRange(),
-                        rope.characterLength());
-                dupped.setRope(duppedRope);
+                if (isBytesMutableNode.execute(rope)) {
+                    isBytesMutableProfile.enter();
+                    dupped.setRope(makeLeafRopeNode.executeMake(
+                            bytesCopyNode.execute(rope),
+                            rope.getEncoding(),
+                            rope.getCodeRange(),
+                            rope.characterLength()));
+                }
                 return dupped;
             } else {
                 return self;

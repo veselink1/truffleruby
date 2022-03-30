@@ -66,6 +66,7 @@ public abstract class RopeNodes {
             return RopeNodesFactory.SubstringNodeGen.create();
         }
 
+
         public abstract Rope executeSubstring(Rope base, int byteOffset, int byteLength);
 
         @Specialization(guards = "byteLength == 0")
@@ -405,6 +406,27 @@ public abstract class RopeNodes {
 
     }
 
+    public abstract static class CommonCodeRangeNode extends RubyBaseNode {
+
+        public abstract CodeRange execute(CodeRange first, CodeRange second);
+
+        @Specialization
+        protected CodeRange commonCodeRange(CodeRange first, CodeRange second,
+                @Cached ConditionProfile sameCodeRangeProfile,
+                @Cached ConditionProfile brokenCodeRangeProfile) {
+            if (sameCodeRangeProfile.profile(first == second)) {
+                return first;
+            }
+
+            if (brokenCodeRangeProfile.profile((first == CR_BROKEN) || (second == CR_BROKEN))) {
+                return CR_BROKEN;
+            }
+
+            // If we get this far, one must be CR_7BIT and the other must be CR_VALID, so promote to the more general code range.
+            return CR_VALID;
+        }
+    }
+
     public abstract static class ConcatNode extends RubyBaseNode {
 
         public static ConcatNode create() {
@@ -478,7 +500,7 @@ public abstract class RopeNodes {
         @SuppressFBWarnings("RV")
         @Specialization(guards = { "!left.isEmpty()", "!right.isEmpty()", "isCodeRangeBroken(left, right)" })
         protected Rope concatCrBroken(ManagedRope left, ManagedRope right, Encoding encoding,
-                @Cached MakeMutableLeafRopeNode makeLeafRopeNode,
+                @Cached("makeMutable()") MakeLeafRopeNode makeLeafRopeNode,
                 @Cached BytesNode leftBytesNode,
                 @Cached BytesNode rightBytesNode) {
             // This specialization was added to a special case where broken code range(s),
@@ -643,16 +665,19 @@ public abstract class RopeNodes {
                 @Cached ConditionProfile isUSAscii,
                 @Cached ConditionProfile isAscii8Bit,
                 @Cached ConditionProfile isAsciiCompatible) {
-            if (isUTF8.profile(encoding == UTF8Encoding.INSTANCE)) {
-                return RopeConstants.EMPTY_UTF8_ROPE;
-            }
 
-            if (isUSAscii.profile(encoding == USASCIIEncoding.INSTANCE)) {
-                return RopeConstants.EMPTY_US_ASCII_ROPE;
-            }
+            if (isMakeReadOnly()) {
+                if (isUTF8.profile(encoding == UTF8Encoding.INSTANCE)) {
+                    return RopeConstants.EMPTY_UTF8_ROPE;
+                }
 
-            if (isAscii8Bit.profile(encoding == ASCIIEncoding.INSTANCE)) {
-                return RopeConstants.EMPTY_ASCII_8BIT_ROPE;
+                if (isUSAscii.profile(encoding == USASCIIEncoding.INSTANCE)) {
+                    return RopeConstants.EMPTY_US_ASCII_ROPE;
+                }
+
+                if (isAscii8Bit.profile(encoding == ASCIIEncoding.INSTANCE)) {
+                    return RopeConstants.EMPTY_ASCII_8BIT_ROPE;
+                }
             }
 
             if (isAsciiCompatible.profile(encoding.isAsciiCompatible())) {
@@ -802,7 +827,7 @@ public abstract class RopeNodes {
             final boolean bytesAreNull = !rope.hasRawBytes();
 
             System.err.println(String.format(
-                    "%s (%s; BN: %b; BL: %d; CL: %d; CR: %s; E: %s, M: %B, S: %S)",
+                    "%s (%s; BN: %b; BL: %d; CL: %d; CR: %s; E: %s, M: %b, S: %S)",
                     printString ? RopeOperations.escape(rope) : "<skipped>",
                     rope.getClass().getSimpleName(),
                     bytesAreNull,
@@ -2130,7 +2155,7 @@ public abstract class RopeNodes {
 
             if (capacity - length < srcBytes.length) {
                 // There is not enough space
-                int newCapacity = Math.max(16, newLength * 2);
+                int newCapacity = newCapacity(capacity, newLength);
                 byte[] newBuffer = new byte[newCapacity];
 
                 System.arraycopy(rope.bytes, 0, newBuffer, 0, length);
@@ -2144,6 +2169,12 @@ public abstract class RopeNodes {
             rope.byteLength = newLength;
             rope.characterLength = newCharacterLength;
             rope.clearHashCode();
+        }
+
+        private int newCapacity(int currentCapacity, int minCapacity) {
+            return Math.max(
+                    getLanguage().options.ARRAY_UNINITIALIZED_SIZE,
+                    Math.max(currentCapacity + (currentCapacity >> 1), minCapacity));
         }
     }
 }
