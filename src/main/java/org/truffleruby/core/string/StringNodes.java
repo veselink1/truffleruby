@@ -5942,11 +5942,18 @@ public abstract class StringNodes {
         @Specialization
         protected Object execute(Object self,
                 @CachedLibrary(limit = "2") RubyStringLibrary libSelf,
-                @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
+                @Cached MakeMutableLeafRopeNode makeMutableLeafRopeNode,
+                @Cached BytesCopyNode bytesCopyNode,
                 @Cached DispatchNode dupNode) {
             if (libSelf.isRubyString(self)) {
                 RubyString dupped = (RubyString) dupNode.call(self, "dup");
-                dupped.setRope(getMutableRopeNode.execute(dupped.getRope(), dupped.getRope().getCodeRange()));
+                final Rope rope = dupped.getRope();
+                final Rope duppedRope = makeMutableLeafRopeNode.executeMake(
+                        bytesCopyNode.execute(rope),
+                        rope.getEncoding(),
+                        rope.getCodeRange(),
+                        rope.characterLength());
+                dupped.setRope(duppedRope);
                 return dupped;
             } else {
                 return self;

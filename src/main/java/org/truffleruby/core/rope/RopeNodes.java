@@ -70,7 +70,7 @@ public abstract class RopeNodes {
 
         @Specialization(guards = "byteLength == 0")
         protected Rope substringZeroBytes(Rope base, int byteOffset, int byteLength,
-                @Cached MakeMutableLeafRopeNode makeLeafRopeNode) {
+                @Cached("makeMutable()") MakeLeafRopeNode makeLeafRopeNode) {
             return makeLeafRopeNode.executeMake(RopeConstants.EMPTY_BYTES, base.getEncoding(), CR_UNKNOWN, 0);
         }
 
@@ -164,7 +164,7 @@ public abstract class RopeNodes {
 
         @Specialization(guards = { "byteLength > 1", "!sameAsBase(base, byteLength)" })
         protected Rope substringNativeRope(NativeRope base, int byteOffset, int byteLength,
-                @Cached MakeMutableLeafRopeNode makeLeafRopeNode) {
+                @Cached("makeMutable()") MakeLeafRopeNode makeLeafRopeNode) {
             return makeLeafRopeNode.executeMake(
                     base.getBytes(byteOffset, byteLength),
                     base.getEncoding(),
@@ -239,7 +239,7 @@ public abstract class RopeNodes {
         protected Rope makeSubstringNativeRope(Encoding encoding, NativeRope base, int byteOffset, int byteLength,
                 @Cached ConditionProfile asciiOnlyProfile,
                 @Cached AsciiOnlyNode asciiOnlyNode,
-                @Cached MakeMutableLeafRopeNode makeLeafRopeNode) {
+                @Cached("makeMutable()") MakeLeafRopeNode makeLeafRopeNode) {
             final byte[] bytes = new byte[byteLength];
             base.copyTo(byteOffset, bytes, 0, byteLength);
 
@@ -540,6 +540,10 @@ public abstract class RopeNodes {
             return RopeNodesFactory.MakeLeafRopeNodeGen.create();
         }
 
+        public static MakeLeafRopeNode makeMutable() {
+            return MakeMutableLeafRopeNode.create();
+        }
+
         /** Whether to return a {@link LeafRope} that is in the read-only state or not. */
         protected boolean isMakeReadOnly() {
             return true;
@@ -751,7 +755,7 @@ public abstract class RopeNodes {
         @TruffleBoundary
         @Specialization(guards = { "isSingleByteString(base)", "times > 1" })
         protected Rope multiplySingleByteString(Rope base, int times,
-                @Cached MakeMutableLeafRopeNode makeLeafRopeNode) {
+                @Cached("makeMutable()") MakeLeafRopeNode makeLeafRopeNode) {
             final byte filler = base.getBytes()[0];
 
             byte[] buffer = new byte[times];
