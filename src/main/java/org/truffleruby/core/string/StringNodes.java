@@ -1342,7 +1342,7 @@ public abstract class StringNodes {
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
                 @Cached CharacterLengthNode characterLengthNode,
                 @Cached @Shared("codeRangeNode") CodeRangeNode codeRangeNode,
-                @Cached @Shared("makeLeafRopeNode") MakeLeafRopeNode makeLeafRopeNode,
+                @Cached @Shared("makeLeafRopeNode") MakeMutableLeafRopeNode makeLeafRopeNode,
                 @Cached @Shared("dummyEncodingProfile") ConditionProfile dummyEncodingProfile,
                 @Cached @Shared("modifiedProfile") ConditionProfile modifiedProfile) {
             final Rope rope = string.rope;
@@ -1371,7 +1371,7 @@ public abstract class StringNodes {
         protected Object downcaseMultiByteComplex(RubyString string, int caseMappingOptions,
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
                 @Cached @Shared("codeRangeNode") CodeRangeNode codeRangeNode,
-                @Cached @Shared("makeLeafRopeNode") MakeLeafRopeNode makeLeafRopeNode,
+                @Cached @Shared("makeLeafRopeNode") MakeMutableLeafRopeNode makeLeafRopeNode,
                 @Cached @Shared("dummyEncodingProfile") ConditionProfile dummyEncodingProfile,
                 @Cached @Shared("modifiedProfile") ConditionProfile modifiedProfile) {
             final Rope rope = string.rope;
@@ -2133,7 +2133,7 @@ public abstract class StringNodes {
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
                 @Cached CharacterLengthNode characterLengthNode,
                 @Cached @Shared("codeRangeNode") CodeRangeNode codeRangeNode,
-                @Cached @Shared("makeLeafRopeNode") MakeLeafRopeNode makeLeafRopeNode,
+                @Cached @Shared("makeLeafRopeNode") MakeMutableLeafRopeNode makeLeafRopeNode,
                 @Cached @Shared("dummyEncodingProfile") ConditionProfile dummyEncodingProfile,
                 @Cached @Shared("modifiedProfile") ConditionProfile modifiedProfile) {
             // Taken from org.jruby.RubyString#swapcase_bang19.
@@ -2164,7 +2164,7 @@ public abstract class StringNodes {
         protected Object swapcaseMultiByteComplex(RubyString string, int caseMappingOptions,
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
                 @Cached @Shared("codeRangeNode") CodeRangeNode codeRangeNode,
-                @Cached @Shared("makeLeafRopeNode") MakeLeafRopeNode makeLeafRopeNode,
+                @Cached @Shared("makeLeafRopeNode") MakeMutableLeafRopeNode makeLeafRopeNode,
                 @Cached @Shared("dummyEncodingProfile") ConditionProfile dummyEncodingProfile,
                 @Cached @Shared("modifiedProfile") ConditionProfile modifiedProfile) {
             // Taken from org.jruby.RubyString#swapcase_bang19.
@@ -2685,7 +2685,7 @@ public abstract class StringNodes {
     @CoreMethod(names = "succ!", raiseIfFrozenSelf = true)
     public abstract static class SuccBangNode extends CoreMethodArrayArgumentsNode {
 
-        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeLeafRopeNode.create();
+        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeMutableLeafRopeNode.create();
 
         @Specialization
         protected RubyString succBang(RubyString string) {
@@ -2852,7 +2852,7 @@ public abstract class StringNodes {
     public abstract static class ReverseBangNode extends CoreMethodArrayArgumentsNode {
 
         @Child CharacterLengthNode characterLengthNode = CharacterLengthNode.create();
-        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeLeafRopeNode.create();
+        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeMutableLeafRopeNode.create();
 
         @Specialization(guards = "reverseIsEqualToSelf(string, characterLengthNode)")
         protected RubyString reverseNoOp(RubyString string) {
@@ -3299,7 +3299,7 @@ public abstract class StringNodes {
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
                 @Cached CharacterLengthNode characterLengthNode,
                 @Cached @Shared("codeRangeNode") CodeRangeNode codeRangeNode,
-                @Cached @Shared("makeLeafRopeNode") MakeLeafRopeNode makeLeafRopeNode,
+                @Cached @Shared("makeLeafRopeNode") MakeMutableLeafRopeNode makeLeafRopeNode,
                 @Cached @Shared("dummyEncodingProfile") ConditionProfile dummyEncodingProfile,
                 @Cached @Shared("modifiedProfile") ConditionProfile modifiedProfile) {
             final Rope rope = string.rope;
@@ -3329,7 +3329,7 @@ public abstract class StringNodes {
         protected Object upcaseMultiByteComplex(RubyString string, int caseMappingOptions,
                 @Cached @Shared("bytesNode") BytesNode bytesNode,
                 @Cached @Shared("codeRangeNode") CodeRangeNode codeRangeNode,
-                @Cached @Shared("makeLeafRopeNode") MakeLeafRopeNode makeLeafRopeNode,
+                @Cached @Shared("makeLeafRopeNode") MakeMutableLeafRopeNode makeLeafRopeNode,
                 @Cached @Shared("dummyEncodingProfile") ConditionProfile dummyEncodingProfile,
                 @Cached @Shared("modifiedProfile") ConditionProfile modifiedProfile) {
             final Rope rope = string.rope;
@@ -3378,7 +3378,7 @@ public abstract class StringNodes {
         @Child private BytesNode bytesNode = BytesNode.create();
         @Child private CodeRangeNode codeRangeNode = CodeRangeNode.create();
         @Child private CharacterLengthNode characterLengthNode = CharacterLengthNode.create();
-        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeLeafRopeNode.create();
+        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeMutableLeafRopeNode.create();
         @Child SingleByteOptimizableNode singleByteOptimizableNode = SingleByteOptimizableNode
                 .create();
 
@@ -5140,7 +5140,7 @@ public abstract class StringNodes {
     @CoreMethod(names = "pattern", constructor = true, required = 2, lowerFixnum = { 1, 2 })
     public abstract static class StringPatternPrimitiveNode extends CoreMethodArrayArgumentsNode {
 
-        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeLeafRopeNode.create();
+        @Child private MakeLeafRopeNode makeLeafRopeNode = MakeMutableLeafRopeNode.create();
         @Child private RepeatNode repeatNode = RepeatNode.create();
 
         @Specialization(guards = "pattern >= 0")

@@ -70,7 +70,7 @@ public abstract class RopeNodes {
 
         @Specialization(guards = "byteLength == 0")
         protected Rope substringZeroBytes(Rope base, int byteOffset, int byteLength,
-                @Cached MakeLeafRopeNode makeLeafRopeNode) {
+                @Cached MakeMutableLeafRopeNode makeLeafRopeNode) {
             return makeLeafRopeNode.executeMake(RopeConstants.EMPTY_BYTES, base.getEncoding(), CR_UNKNOWN, 0);
         }
 
@@ -164,7 +164,7 @@ public abstract class RopeNodes {
 
         @Specialization(guards = { "byteLength > 1", "!sameAsBase(base, byteLength)" })
         protected Rope substringNativeRope(NativeRope base, int byteOffset, int byteLength,
-                @Cached MakeLeafRopeNode makeLeafRopeNode) {
+                @Cached MakeMutableLeafRopeNode makeLeafRopeNode) {
             return makeLeafRopeNode.executeMake(
                     base.getBytes(byteOffset, byteLength),
                     base.getEncoding(),
@@ -239,7 +239,7 @@ public abstract class RopeNodes {
         protected Rope makeSubstringNativeRope(Encoding encoding, NativeRope base, int byteOffset, int byteLength,
                 @Cached ConditionProfile asciiOnlyProfile,
                 @Cached AsciiOnlyNode asciiOnlyNode,
-                @Cached MakeLeafRopeNode makeLeafRopeNode) {
+                @Cached MakeMutableLeafRopeNode makeLeafRopeNode) {
             final byte[] bytes = new byte[byteLength];
             base.copyTo(byteOffset, bytes, 0, byteLength);
 
@@ -478,7 +478,7 @@ public abstract class RopeNodes {
         @SuppressFBWarnings("RV")
         @Specialization(guards = { "!left.isEmpty()", "!right.isEmpty()", "isCodeRangeBroken(left, right)" })
         protected Rope concatCrBroken(ManagedRope left, ManagedRope right, Encoding encoding,
-                @Cached MakeLeafRopeNode makeLeafRopeNode,
+                @Cached MakeMutableLeafRopeNode makeLeafRopeNode,
                 @Cached BytesNode leftBytesNode,
                 @Cached BytesNode rightBytesNode) {
             // This specialization was added to a special case where broken code range(s),
@@ -751,7 +751,7 @@ public abstract class RopeNodes {
         @TruffleBoundary
         @Specialization(guards = { "isSingleByteString(base)", "times > 1" })
         protected Rope multiplySingleByteString(Rope base, int times,
-                @Cached MakeLeafRopeNode makeLeafRopeNode) {
+                @Cached MakeMutableLeafRopeNode makeLeafRopeNode) {
             final byte filler = base.getBytes()[0];
 
             byte[] buffer = new byte[times];
