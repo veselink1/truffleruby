@@ -39,6 +39,7 @@ import com.oracle.truffle.api.dsl.NodeField;
 import com.oracle.truffle.api.dsl.ReportPolymorphism;
 import com.oracle.truffle.api.dsl.Specialization;
 import com.oracle.truffle.api.nodes.NodeCost;
+import com.oracle.truffle.api.profiles.ConditionProfile;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.language.RubyBaseNode;
 
@@ -68,11 +69,13 @@ public class StringProfilingNodes {
     @ReportPolymorphism
     protected abstract static class RopeReuseMonitorNode extends RubyBaseNode {
 
-        // Some large limit that we could never overflow due to race conditions or by our arithmetic.
-        private static final int MAX_VALUE = 0x0fffffff;
+        // The same upper limit that is used in ConditionProfile.Counting.
+        private static final int MAX_VALUE = 1073741823;
 
-        protected int ropeReuseCount = 1000;
-        protected int ropeNoReuseCount = 1000;
+        // We need to initialize with some positive values. Otherwise, we will
+        // get very high or very low reuse which will not be representative.
+        protected int ropeReuseCount = 100;
+        protected int ropeNoReuseCount = 100;
         protected int prevOutputRopeIdentity = 0;
 
         @Override
@@ -84,19 +87,30 @@ public class StringProfilingNodes {
 
         public abstract double execute(Rope inputRope, Rope outputRope);
 
-        @Specialization
+        @Specialization(rewriteOn = ArithmeticException.class)
         protected double profile(Rope inputRope, Rope outputRope) {
 
             boolean isReused = prevOutputRopeIdentity == System.identityHashCode(inputRope);
             prevOutputRopeIdentity = System.identityHashCode(outputRope);
             if (isReused) {
-                if (ropeReuseCount < MAX_VALUE) {
-                    ++ropeReuseCount;
+                if (ropeReuseCount >= MAX_VALUE) {
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    throw new ArithmeticException();
                 }
-            } else if (ropeNoReuseCount < MAX_VALUE) {
+                ++ropeReuseCount;
+            } else {
+                if (ropeNoReuseCount >= MAX_VALUE) {
+                    CompilerDirectives.transferToInterpreterAndInvalidate();
+                    throw new ArithmeticException();
+                }
                 ++ropeNoReuseCount;
             }
 
+            return (double) ropeReuseCount / (ropeReuseCount + ropeNoReuseCount);
+        }
+
+        @Specialization
+        protected double fixed(Rope inputRope, Rope outputRope) {
             return (double) ropeReuseCount / (ropeReuseCount + ropeNoReuseCount);
         }
 
@@ -159,7 +173,14 @@ public class StringProfilingNodes {
     @ReportPolymorphism
     protected abstract static class EphemeralProfileRopeMutationNode extends ProfileRopeMutationNode {
 
-        public static final double HIGH_REUSE_THRESHOLD = 0.75;
+        // 0.9 means that 90% of rope operations are reusing the same rope.
+        // This could also be interpreted as 10 consecutive operations per rope.
+        // 10.times { |n| a[n] = ?; }
+        // With the initial value of 100 for rope reuse/no-reuse, this can mean at least
+        // 1000 invocations.
+        public static final double HIGH_REUSE_THRESHOLD = 0.9;
+        // 0.1 means that only 10% of rope operations are reusing the same rope.
+        // 50% means 2 consecutive operations per rope. (a[x] = ?; a[y] = ?)
         public static final double LOW_REUSE_THRESHOLD = 0.1;
 
         public static ProfileRopeMutationNode create() {
@@ -174,11 +195,9 @@ public class StringProfilingNodes {
 
             if (reuse >= HIGH_REUSE_THRESHOLD) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                System.err.println("Collapsing EphemeralProfileRopeMutationNode -> MUTABLE");
                 replace(ConstantProfileRopeMutationNode.create(RopeOptimizationHint.MUTABLE));
             } else if (reuse <= LOW_REUSE_THRESHOLD) {
                 CompilerDirectives.transferToInterpreterAndInvalidate();
-                System.err.println("Collapsing EphemeralProfileRopeMutationNode -> IMMUTABLE");
                 replace(ConstantProfileRopeMutationNode.create(RopeOptimizationHint.IMMUTABLE));
             }
 
