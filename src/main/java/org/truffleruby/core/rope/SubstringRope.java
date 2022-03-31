@@ -41,7 +41,9 @@ public class SubstringRope extends ManagedRope {
         super(encoding, codeRange, byteLength, characterLength, null);
         assert !(child instanceof SubstringRope) : child.getClass();
         assert !(child instanceof LeafRope) || ((LeafRope) child).isReadOnly();
-        // TODO(veselink1): overload getShared for slices
+
+        assert RopeSharingValidator.checkAttach(child, null) : "Unsafe sharing of mutable rope detected!";
+
         this.child = child;
         this.byteOffset = byteOffset;
 

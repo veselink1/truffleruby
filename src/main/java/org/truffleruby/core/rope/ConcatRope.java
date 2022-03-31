@@ -75,6 +75,8 @@ public class ConcatRope extends ManagedRope {
         assert right != null;
         assert !(left instanceof LeafRope) || ((LeafRope) left).isReadOnly();
         assert !(right instanceof LeafRope) || ((LeafRope) right).isReadOnly();
+        assert RopeSharingValidator.checkAttach(left, null) : "Unsafe sharing of mutable rope detected!";
+        assert RopeSharingValidator.checkAttach(right, null) : "Unsafe sharing of mutable rope detected!";
         this.left = left;
         this.right = right;
     }

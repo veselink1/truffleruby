@@ -18,6 +18,7 @@ import org.truffleruby.core.klass.RubyClass;
 import org.truffleruby.core.rope.MutableRope;
 import org.truffleruby.core.rope.Rope;
 import org.truffleruby.core.rope.RopeOperations;
+import org.truffleruby.core.rope.RopeSharingValidator;
 import org.truffleruby.interop.ToJavaStringNode;
 import org.truffleruby.language.RubyDynamicObject;
 import org.truffleruby.language.library.RubyLibrary;
@@ -54,7 +55,7 @@ public class RubyString extends RubyDynamicObject {
     public void setRope(Rope rope) {
         assert rope.encoding == encoding.jcoding : rope.encoding.toString() + " does not equal " +
                 encoding.jcoding.toString();
-        assert prepareToSetAndCheckRope(rope) : "Unsafe sharing of mutable rope detected!";
+        assert RopeSharingValidator.checkAttach(rope, this.rope) : "Unsafe sharing of mutable rope detected!";
 
         this.rope = rope;
     }
@@ -62,7 +63,7 @@ public class RubyString extends RubyDynamicObject {
     public void setRope(Rope rope, RubyEncoding encoding) {
         assert rope.encoding == encoding.jcoding : String
                 .format("rope: %s != string: %s", rope.encoding.toString(), encoding.jcoding.toString());
-        assert prepareToSetAndCheckRope(rope) : "Unsafe sharing of mutable rope detected!";
+        assert RopeSharingValidator.checkAttach(rope, this.rope) : "Unsafe sharing of mutable rope detected!";
 
         this.rope = rope;
         this.encoding = encoding;
@@ -125,33 +126,4 @@ public class RubyString extends RubyDynamicObject {
         return toJavaStringNode.executeToJavaString(this);
     }
     // endregion
-
-    // This is slow and is meant to be used when assertions are enabled.
-    private boolean prepareToSetAndCheckRope(Rope rope) {
-        if (this.rope == rope) {
-            return true;
-        }
-
-        if (this.rope instanceof MutableRope) {
-            KNOWN_MUTABLE_ROPES.remove(new IdentityKey<>((MutableRope) this.rope));
-        }
-
-        if (!(rope instanceof MutableRope)) {
-            return true;
-        }
-
-        MutableRope mutableRope = (MutableRope) rope;
-        if (mutableRope.isReadOnly()) {
-            return true;
-        }
-
-        synchronized (KNOWN_MUTABLE_ROPES) {
-            if (KNOWN_MUTABLE_ROPES.contains(new IdentityKey<>(mutableRope))) {
-                return false;
-            }
-            KNOWN_MUTABLE_ROPES.add(new IdentityKey<>(mutableRope));
-        }
-
-        return true;
-    }
 }
