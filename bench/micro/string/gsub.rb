@@ -13,14 +13,16 @@ str3 = 'dog'
 regex2 = /\d/
 regex3 = /\w+/
 
+dev_null = File.open('/dev/null', 'w')
+
 benchmark 'core-string-gsub-string' do
-  str1.gsub('white', 'dark')
+  dev_null.write str1.gsub('white', 'dark')
 end
 
 benchmark "core-string-gsub-regex" do
-  str2.gsub(regex2, '2')
+  dev_null.write str2.gsub(regex2, '2')
 end
 
 benchmark "core-string-gsub-regex-block" do
-  str3.gsub(regex3) { |animal| animal == 'dog' ? 'cat' : 'dog' }
+  dev_null.write str3.gsub(regex3) { |animal| animal == 'dog' ? 'cat' : 'dog' }
 end
