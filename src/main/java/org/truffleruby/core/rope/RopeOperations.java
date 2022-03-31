@@ -309,11 +309,14 @@ public class RopeOperations {
             return rope.getBytes();
         }
 
-        int bufferPosition = 0;
-        int byteOffset = 0;
-
         final byte[] buffer = new byte[rope.byteLength()];
+        flattenBytesInto(rope, buffer, 0);
+        return buffer;
+    }
 
+    @TruffleBoundary
+    public static void flattenBytesInto(Rope rope, byte[] buffer, int bufferPosition) {
+        int byteOffset = 0;
         // As we traverse the rope tree, we need to keep track of any bounded lengths of SubstringRopes. LeafRopes always
         // provide their full byte[]. ConcatRope always provides the full byte[] of each of its children. SubstringRopes,
         // in contrast, may bound the length of their children. Since we may have SubstringRopes of SubstringRopes, we
@@ -499,8 +502,6 @@ public class RopeOperations {
                         "Don't know how to flatten rope of type: " + current.getClass().getName());
             }
         }
-
-        return buffer;
     }
 
     /** Used to implement {@link Rope#getByteSlow(int)} in a non-recursive fashion for some Rope subclasses. Do not call

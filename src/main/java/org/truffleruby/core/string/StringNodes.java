@@ -5574,6 +5574,7 @@ public abstract class StringNodes {
 
                 appendMutableNode.execute(result, right);
                 string.setRope(result);
+
                 return string;
             } else {
                 final Rope result = concatNode.executeConcat(left, right, left.getEncoding());
@@ -5845,6 +5846,9 @@ public abstract class StringNodes {
 
         @Child private CheckEncodingNode checkEncodingNode;
         @Child private ConcatNode concatNode;
+        @Child private RopeNodes.GetMutableRopeNode getMutableRopeNode;
+        @Child private RopeNodes.AppendMutableNode appendMutableNode;
+        @Child private RopeNodes.CommonCodeRangeNode commonCodeRangeNode;
 
         public static StringAppendNode create() {
             return StringAppendNodeGen.create();
@@ -5858,27 +5862,36 @@ public abstract class StringNodes {
                 @CachedLibrary(limit = "2") RubyStringLibrary libOther,
                 @Cached WithEncodingNode withEncodingNode,
                 @Cached ConditionProfile isMutableProfile,
-                @Cached RopeNodes.CommonCodeRangeNode commonCodeRangeNode,
-                @Cached RopeNodes.IsBytesMutableNode isBytesMutableNode,
-                @Cached RopeNodes.GetMutableRopeNode getMutableRopeNode,
-                @Cached RopeNodes.AppendMutableNode appendMutableNode) {
+                @Cached RopeNodes.IsBytesMutableNode isBytesMutableNode) {
             final Rope left = libString.getRope(string);
             final Rope right = libOther.getRope(other);
 
             final RubyEncoding compatibleEncoding = executeCheckEncoding(string, other);
-            final Rope leftWithEncoding = withEncodingNode.executeWithEncoding(left, compatibleEncoding.jcoding);
 
             if (isMutableProfile.profile(isBytesMutableNode.execute(left))) {
-                LeafRope result = getMutableRopeNode.execute(
-                        leftWithEncoding,
-                        commonCodeRangeNode.execute(leftWithEncoding.getCodeRange(), right.getCodeRange()));
-
-                appendMutableNode.execute(result, right);
+                final Rope leftWithEncoding = withEncodingNode.executeWithEncoding(left, compatibleEncoding.jcoding);
+                final Rope result = executeAppend(leftWithEncoding, right);
                 return Pair.create(result, compatibleEncoding);
             } else {
                 final Rope result = executeConcat(left, right, compatibleEncoding);
                 return Pair.create(result, compatibleEncoding);
             }
+        }
+
+        private Rope executeAppend(Rope left, Rope right) {
+            if (commonCodeRangeNode == null) {
+                CompilerDirectives.transferToInterpreterAndInvalidate();
+                commonCodeRangeNode = insert(RopeNodes.CommonCodeRangeNode.create());
+                appendMutableNode = insert(RopeNodes.AppendMutableNode.create());
+                getMutableRopeNode = insert(RopeNodes.GetMutableRopeNode.create());
+            }
+
+            LeafRope result = getMutableRopeNode.execute(
+                    left,
+                    commonCodeRangeNode.execute(left.getCodeRange(), right.getCodeRange()));
+
+            appendMutableNode.execute(result, right);
+            return result;
         }
 
         private Rope executeConcat(Rope left, Rope right, RubyEncoding compatibleEncoding) {

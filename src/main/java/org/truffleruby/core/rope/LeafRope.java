@@ -13,7 +13,7 @@ import org.jcodings.Encoding;
 
 public abstract class LeafRope extends ManagedRope implements MutableRope {
 
-    private volatile boolean isReadOnly;
+    private boolean isReadOnly;
 
     protected LeafRope(
             boolean isReadOnly,
@@ -45,5 +45,13 @@ public abstract class LeafRope extends ManagedRope implements MutableRope {
     public void setByte(int index, byte b) {
         assert !isReadOnly() : this.getClass() + " not mutable!";
         bytes[index] = b;
+    }
+
+    public byte[] takeBytes() {
+        assert !isReadOnly() : this.getClass() + " not mutable!";
+
+        final byte[] bytes = this.bytes;
+        this.bytes = null;
+        return bytes;
     }
 }
